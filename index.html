@@ -7,9 +7,22 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#0F172A" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="dnslocator" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('dnslocator_theme');
+          var dark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta
       name="description"
       content="Check global DNS propagation across 18 regions and query A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records via Cloudflare 1.1.1.1 DoH in real time."
@@ -87,7 +100,7 @@
       }
     </script>
   </head>
-  <body class="bg-[#F8FAFC] text-[#0F172A] antialiased selection:bg-sky-100 selection:text-sky-950">
+  <body class="bg-[#F8FAFC] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100 antialiased selection:bg-sky-100 selection:text-sky-950 dark:selection:bg-sky-900 dark:selection:text-sky-100">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

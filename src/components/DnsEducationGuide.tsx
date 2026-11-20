@@ -104,51 +104,51 @@ export default function DnsEducationGuide() {
   return (
     <section
       id="dns-guide"
-      className="mt-16 pt-12 border-t border-slate-200 space-y-14"
+      className="mt-16 pt-12 border-t border-slate-200 dark:border-slate-800 space-y-14"
       aria-labelledby="guide-heading"
     >
       {/* Intro */}
       <div className="max-w-3xl">
-        <p className="text-xs font-semibold tracking-wide text-sky-700">
+        <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
           Reference &amp; Troubleshooting Guide
         </p>
         <h2
           id="guide-heading"
-          className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2 tracking-tight"
+          className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2 tracking-tight"
           style={{ textWrap: 'balance' }}
         >
           Understanding DNS Records, Global Propagation, and Mail Health
         </h2>
-        <p className="text-base text-slate-600 mt-3 leading-relaxed">
+        <p className="text-base text-slate-600 dark:text-slate-300 mt-3 leading-relaxed">
           The Domain Name System translates human-readable hostnames into IP addresses and routing metadata. When you update a DNS record at your provider, recursive resolvers worldwide cache the previous answer until its Time to Live (TTL) expires—making multi-region checks essential before declaring a launch complete.
         </p>
       </div>
 
       {/* Section 1: DNS Record Types */}
       <div>
-        <h3 className="text-xl font-semibold text-slate-900 mb-4">
+        <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">
           01. Core DNS Record Types Explained
         </h3>
-        <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
           {DNS_RECORD_GUIDE.map((item) => (
             <div
               key={item.type}
               className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start"
             >
               <div className="lg:col-span-3">
-                <span className="font-mono text-sm font-semibold text-sky-700">
+                <span className="font-mono text-sm font-semibold text-sky-700 dark:text-sky-400">
                   {item.type}
                 </span>
-                <div className="text-sm font-semibold text-slate-900 mt-0.5">
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
                   {item.name}
                 </div>
               </div>
-              <div className="lg:col-span-5 text-sm text-slate-600 leading-relaxed">
+              <div className="lg:col-span-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 <p>{item.purpose}</p>
-                <p className="text-xs text-slate-500 mt-1.5">{item.notes}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{item.notes}</p>
               </div>
               <div className="lg:col-span-4">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-800 break-all">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/70 px-3 py-2 font-mono text-xs text-slate-800 dark:text-slate-200 break-all">
                   {item.example}
                 </div>
               </div>
@@ -159,57 +159,57 @@ export default function DnsEducationGuide() {
 
       {/* Section 2: Propagation & Troubleshooting */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             02. How DNS Propagation &amp; TTL Caching Work
           </h3>
-          <div className="text-sm text-slate-600 space-y-3 leading-relaxed">
+          <div className="text-sm text-slate-600 dark:text-slate-300 space-y-3 leading-relaxed">
             <p>
-              When a browser or mail server requests <span className="font-mono text-slate-800">example.com</span>, it asks a recursive resolver (such as Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9, or an ISP resolver). If the answer is absent from cache, the resolver walks the hierarchy from the root servers to the TLD registry and finally to your authoritative nameservers.
+              When a browser or mail server requests <span className="font-mono text-slate-800 dark:text-slate-200">example.com</span>, it asks a recursive resolver (such as Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9, or an ISP resolver). If the answer is absent from cache, the resolver walks the hierarchy from the root servers to the TLD registry and finally to your authoritative nameservers.
             </p>
             <p>
-              Every returned record carries a <strong className="font-semibold text-slate-900">TTL (Time to Live)</strong> in seconds. A TTL of <span className="font-mono text-slate-800">3600</span> tells resolvers worldwide to reuse the cached response for one full hour before checking your authoritative server again. Lowering TTL to <span className="font-mono text-slate-800">300</span> prior to a migration dramatically shortens cutover lag.
+              Every returned record carries a <strong className="font-semibold text-slate-900 dark:text-slate-100">TTL (Time to Live)</strong> in seconds. A TTL of <span className="font-mono text-slate-800 dark:text-slate-200">3600</span> tells resolvers worldwide to reuse the cached response for one full hour before checking your authoritative server again. Lowering TTL to <span className="font-mono text-slate-800 dark:text-slate-200">300</span> prior to a migration dramatically shortens cutover lag.
             </p>
             <p>
-              When checking global regions, seeing two different IP addresses across continents does not automatically mean an error. Modern CDNs and cloud load balancers use <strong className="font-semibold text-slate-900">GeoDNS</strong> and <strong className="font-semibold text-slate-900">EDNS Client Subnet (ECS)</strong> to direct North American, European, and Asia-Pacific traffic to nearby points of presence.
+              When checking global regions, seeing two different IP addresses across continents does not automatically mean an error. Modern CDNs and cloud load balancers use <strong className="font-semibold text-slate-900 dark:text-slate-100">GeoDNS</strong> and <strong className="font-semibold text-slate-900 dark:text-slate-100">EDNS Client Subnet (ECS)</strong> to direct North American, European, and Asia-Pacific traffic to nearby points of presence.
             </p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             03. Troubleshooting Common Domain &amp; Email Errors
           </h3>
           <dl className="space-y-3.5 text-sm">
             <div>
-              <dt className="font-semibold text-slate-900">
+              <dt className="font-semibold text-slate-900 dark:text-slate-100">
                 NXDOMAIN (Non-Existent Domain)
               </dt>
-              <dd className="text-slate-600 mt-0.5 leading-relaxed">
+              <dd className="text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
                 The authoritative nameserver reports no records for that hostname. Verify the subdomain spelling, check whether your registrar domain has expired, and confirm NS delegation matches your active DNS host.
               </dd>
             </div>
             <div>
-              <dt className="font-semibold text-slate-900">
+              <dt className="font-semibold text-slate-900 dark:text-slate-100">
                 SERVFAIL or Regional Timeouts
               </dt>
-              <dd className="text-slate-600 mt-0.5 leading-relaxed">
+              <dd className="text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
                 Often caused by broken DNSSEC DS signatures at the registrar after switching DNS providers, or unreachable authoritative nameservers. Disable stale DS records before moving NS delegation.
               </dd>
             </div>
             <div>
-              <dt className="font-semibold text-slate-900">
+              <dt className="font-semibold text-slate-900 dark:text-slate-100">
                 Email Delivery Rejections (SPF / DMARC Failures)
               </dt>
-              <dd className="text-slate-600 mt-0.5 leading-relaxed">
-                Ensure only a single <span className="font-mono text-slate-800">v=spf1</span> TXT record exists at the apex domain, authorize every legitimate mail sender, and publish a <span className="font-mono text-slate-800">_dmarc</span> TXT record to pass strict inbox checks.
+              <dd className="text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
+                Ensure only a single <span className="font-mono text-slate-800 dark:text-slate-200">v=spf1</span> TXT record exists at the apex domain, authorize every legitimate mail sender, and publish a <span className="font-mono text-slate-800 dark:text-slate-200">_dmarc</span> TXT record to pass strict inbox checks.
               </dd>
             </div>
             <div>
-              <dt className="font-semibold text-slate-900">
+              <dt className="font-semibold text-slate-900 dark:text-slate-100">
                 Apex Domain CNAME Conflicts
               </dt>
-              <dd className="text-slate-600 mt-0.5 leading-relaxed">
+              <dd className="text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
                 Never combine a standard CNAME with MX or NS records on the root domain. Use ALIAS/ANAME flattening at your DNS provider or point the apex A/AAAA records directly to your edge IPs.
               </dd>
             </div>
@@ -219,10 +219,10 @@ export default function DnsEducationGuide() {
 
       {/* Section 3: FAQ Accordion */}
       <div className="max-w-3xl">
-        <h3 className="text-xl font-semibold text-slate-900 mb-4">
+        <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">
           04. Frequently Asked Questions
         </h3>
-        <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-200">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
           {FAQ_ITEMS.map((item, index) => {
             const isOpen = openFaq === index;
             return (
@@ -231,18 +231,18 @@ export default function DnsEducationGuide() {
                   type="button"
                   onClick={() => setOpenFaq(isOpen ? null : index)}
                   aria-expanded={isOpen}
-                  className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
+                  className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                 >
-                  <span className="text-sm font-semibold text-slate-900">{item.q}</span>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.q}</span>
                   <ChevronDown
-                    className={`w-4 h-4 text-slate-500 shrink-0 transition-transform duration-150 ${
+                    className={`w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0 transition-transform duration-150 ${
                       isOpen ? 'rotate-180' : ''
                     }`}
                     aria-hidden="true"
                   />
                 </button>
                 {isOpen && (
-                  <div className="px-5 pb-4 text-sm text-slate-600 leading-relaxed">
+                  <div className="px-5 pb-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                     {item.a}
                   </div>
                 )}

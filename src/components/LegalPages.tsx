@@ -56,32 +56,32 @@ export default function LegalPages({
       <button
         type="button"
         onClick={onNavigateHome}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 hover:text-sky-900 mb-6"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 mb-6"
       >
         <ArrowLeft className="w-4 h-4" aria-hidden="true" />
         <span>Back to DNS Lookup Tool</span>
       </button>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 space-y-6">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 space-y-6">
         {page === 'about' && (
           <>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
                 About dnslocator.online
               </h1>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 Independent Global DNS Propagation &amp; Record Diagnostic Tool
               </p>
             </div>
-            <div className="space-y-4 text-sm sm:text-base text-slate-600 leading-relaxed">
+            <div className="space-y-4 text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
               <p>
-                <strong className="text-slate-900">dnslocator.online</strong> is a free, lightweight Node.js web utility built for developers, system administrators, and website owners who need fast visibility into public DNS records and worldwide DNS propagation.
+                <strong className="text-slate-900 dark:text-slate-100">dnslocator.online</strong> is a free, lightweight Node.js web utility built for developers, system administrators, and website owners who need fast visibility into public DNS records and worldwide DNS propagation.
               </p>
               <p>
-                In Global Propagation mode, our Node.js backend dispatches simultaneous queries across 18 geographically distributed DNS checkpoints—spanning North America, South America, Europe, Asia-Pacific, Oceania, and Africa—using public DNS over HTTPS (DoH) resolvers and regional EDNS Client Subnet (ECS) routing. In All Records mode, dnslocator.online queries <span className="font-mono text-slate-800">A, AAAA, CNAME, MX, TXT, NS, SOA, CAA</span>, and <span className="font-mono text-slate-800">_dmarc</span> records in parallel via Cloudflare&apos;s public 1.1.1.1 DoH JSON resolver.
+                In Global Propagation mode, our Node.js backend dispatches simultaneous queries across 18 geographically distributed DNS checkpoints—spanning North America, South America, Europe, Asia-Pacific, Oceania, and Africa—using public DNS over HTTPS (DoH) resolvers and regional EDNS Client Subnet (ECS) routing. In All Records mode, dnslocator.online queries <span className="font-mono text-slate-800 dark:text-slate-200">A, AAAA, CNAME, MX, TXT, NS, SOA, CAA</span>, and <span className="font-mono text-slate-800 dark:text-slate-200">_dmarc</span> records in parallel via Cloudflare&apos;s public 1.1.1.1 DoH JSON resolver.
               </p>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                <strong className="text-slate-900 block mb-1">Non-Affiliation Notice</strong>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 p-4 text-sm text-slate-700 dark:text-slate-300">
+                <strong className="text-slate-900 dark:text-slate-100 block mb-1">Non-Affiliation Notice</strong>
                 dnslocator.online displays publicly available DNS zone records only. We are not affiliated with, endorsed by, or connected to ICANN, IANA, Cloudflare, Google, or any domain name registrar.
               </div>
             </div>
@@ -91,24 +91,24 @@ export default function LegalPages({
         {page === 'privacy' && (
           <>
             <div>
-              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 mb-2">
+              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400 mb-2">
                 <ShieldCheck className="w-4 h-4" aria-hidden="true" />
                 <span>Privacy Policy</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
                 Privacy Policy
               </h1>
-              <p className="text-xs text-slate-500 mt-1">Effective Date: November 2026</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Effective Date: November 2026</p>
             </div>
 
-            <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
+            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
               <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   1. DNS Query Transmission &amp; Third-Party Resolvers
                 </h2>
                 <p>
                   When you submit a domain name or IP address on dnslocator.online, the queried hostname is transmitted from our Node.js server to{' '}
-                  <strong className="text-slate-900">
+                  <strong className="text-slate-900 dark:text-slate-100">
                     Cloudflare&apos;s public 1.1.1.1 DNS over HTTPS (DoH) resolver
                   </strong>{' '}
                   (<span className="font-mono">cloudflare-dns.com</span>) and, when using Global Propagation mode, to our configured regional public DNS resolvers (including Google Public DNS, AdGuard DNS, Control D, DNS.SB, IIJ Public DNS, TWNIC Quad101, and AliDNS) solely to retrieve public DNS records on your behalf.
@@ -116,7 +116,7 @@ export default function LegalPages({
               </section>
 
               <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   2. Rate Limiting &amp; Short-Lived Caching
                 </h2>
                 <p>
@@ -125,16 +125,16 @@ export default function LegalPages({
               </section>
 
               <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   3. Browser Local Storage
                 </h2>
                 <p>
-                  Your browser stores recent DNS lookup responses and recent query history locally in <span className="font-mono">localStorage</span> for 5 minutes to avoid redundant network requests. You may clear this cache at any time using the Clear Cache button in the top navigation bar.
+                  Your browser stores recent DNS lookup responses, theme preferences, and recent query history locally in <span className="font-mono">localStorage</span> for 5 minutes to avoid redundant network requests. You may clear the DNS cache at any time using the Clear Cache button.
                 </p>
               </section>
 
               <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   4. Contact Information &amp; Inquiries
                 </h2>
                 <p>
@@ -142,7 +142,7 @@ export default function LegalPages({
                   <button
                     type="button"
                     onClick={() => onNavigatePage('contact')}
-                    className="text-sky-700 underline hover:text-sky-900"
+                    className="text-sky-700 dark:text-sky-400 underline hover:text-sky-900 dark:hover:text-sky-300"
                   >
                     Contact page
                   </button>
@@ -156,15 +156,15 @@ export default function LegalPages({
         {page === 'terms' && (
           <>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
                 Terms of Service
               </h1>
-              <p className="text-xs text-slate-500 mt-1">Effective Date: November 2026</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Effective Date: November 2026</p>
             </div>
 
-            <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
+            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
               <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   1. Public Diagnostic Purpose
                 </h2>
                 <p>
@@ -173,7 +173,7 @@ export default function LegalPages({
               </section>
 
               <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   2. Acceptable Use &amp; Rate Limits
                 </h2>
                 <p>
@@ -182,7 +182,7 @@ export default function LegalPages({
               </section>
 
               <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   3. Limitation of Liability
                 </h2>
                 <p>
@@ -196,32 +196,32 @@ export default function LegalPages({
         {page === 'contact' && (
           <>
             <div>
-              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 mb-2">
+              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400 mb-2">
                 <Mail className="w-4 h-4" aria-hidden="true" />
                 <span>Contact Support</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
                 Contact dnslocator.online
               </h1>
-              <p className="text-sm text-slate-600 mt-1">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                 Report a resolver issue, request a regional checkpoint, or ask a question about DNS diagnostics.
               </p>
             </div>
 
             {submitSuccess ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 space-y-2">
-                <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm">
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 p-5 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-semibold text-sm">
                   <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                   <span>Message Received</span>
                 </div>
-                <p className="text-sm text-emerald-800">
+                <p className="text-sm text-emerald-800 dark:text-emerald-200">
                   Thank you for reaching out. Your reference ID is{' '}
                   <span className="font-mono font-semibold">{submitSuccess.referenceId}</span>.
                 </p>
                 <button
                   type="button"
                   onClick={() => setSubmitSuccess(null)}
-                  className="text-xs font-medium text-emerald-900 underline pt-1"
+                  className="text-xs font-medium text-emerald-900 dark:text-emerald-300 underline pt-1"
                 >
                   Send another message
                 </button>
@@ -231,7 +231,7 @@ export default function LegalPages({
                 {submitError && (
                   <div
                     role="alert"
-                    className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-800"
+                    className="rounded-lg border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/60 px-3.5 py-2.5 text-sm text-rose-800 dark:text-rose-200"
                   >
                     {submitError}
                   </div>
@@ -241,7 +241,7 @@ export default function LegalPages({
                   <div>
                     <label
                       htmlFor="contact-name"
-                      className="block text-xs font-semibold text-slate-700 mb-1.5"
+                      className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
                     >
                       Name
                     </label>
@@ -253,13 +253,13 @@ export default function LegalPages({
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Your name"
-                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
                   <div>
                     <label
                       htmlFor="contact-email"
-                      className="block text-xs font-semibold text-slate-700 mb-1.5"
+                      className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
                     >
                       Email Address
                     </label>
@@ -270,7 +270,7 @@ export default function LegalPages({
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@example.com"
-                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
                 </div>
@@ -278,7 +278,7 @@ export default function LegalPages({
                 <div>
                   <label
                     htmlFor="contact-subject"
-                    className="block text-xs font-semibold text-slate-700 mb-1.5"
+                    className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
                   >
                     Topic
                   </label>
@@ -286,7 +286,7 @@ export default function LegalPages({
                     id="contact-subject"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
                     <option value="General Question">General Question</option>
                     <option value="Regional Resolver Request">Regional Resolver Request</option>
@@ -298,7 +298,7 @@ export default function LegalPages({
                 <div>
                   <label
                     htmlFor="contact-message"
-                    className="block text-xs font-semibold text-slate-700 mb-1.5"
+                    className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
                   >
                     Message
                   </label>
@@ -310,14 +310,14 @@ export default function LegalPages({
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Describe your question or issue…"
-                    className="w-full p-3 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="h-10 px-5 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
+                  className="h-10 px-5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 disabled:opacity-60 text-white dark:text-slate-950 text-sm font-semibold transition-colors"
                 >
                   {submitting ? 'Sending…' : 'Send Message'}
                 </button>

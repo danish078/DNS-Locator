@@ -574,13 +574,14 @@ function decodeDnsWireResponse(
 
 interface DohJsonResponse {
   Status: number;
+  AD?: boolean;
   Answer?: { name: string; type: number; TTL: number; data: string }[];
 }
 
 async function fetchCloudflareDohJson(
   domain: string,
   type: DnsRecordType
-): Promise<{ status: number; records: DnsRecordItem[] }> {
+): Promise<{ status: number; ad: boolean; records: DnsRecordItem[] }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 4500);
   try {
@@ -607,7 +608,7 @@ async function fetchCloudflareDohJson(
     if (type === 'MX') {
       records.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     }
-    return { status: json.Status ?? 0, records };
+    return { status: json.Status ?? 0, ad: Boolean(json.AD), records };
   } finally {
     clearTimeout(timer);
   }
@@ -867,12 +868,13 @@ export default {
               const result = await fetchCloudflareDohJson(domain, type);
               return { type, ...result };
             } catch {
-              return { type, status: 2, records: [] as DnsRecordItem[] };
+              return { type, status: 2, ad: false, records: [] as DnsRecordItem[] };
             }
           })
         ),
         fetchCloudflareDohJson(`_dmarc.${domain}`, 'TXT').catch(() => ({
           status: 2,
+          ad: false,
           records: [] as DnsRecordItem[],
         })),
       ]);
@@ -881,10 +883,12 @@ export default {
       const recordsByType: Record<string, DnsRecordItem[]> = {};
       const statusByType: Record<string, number> = {};
       let minTtl = 300;
+      let dnssecValidated = false;
 
       for (const entry of zoneResults) {
         recordsByType[entry.type] = entry.records;
         statusByType[entry.type] = entry.status;
+        if (entry.ad) dnssecValidated = true;
         for (const rec of entry.records) {
           records.push(rec);
           if (rec.ttl > 0 && rec.ttl < minTtl) minTtl = rec.ttl;
@@ -908,6 +912,7 @@ export default {
         cached: false,
         queryTimeMs: Math.max(1, Date.now() - started),
         resolver: 'Cloudflare 1.1.1.1 DoH',
+        dnssecValidated,
         records,
         recordsByType,
         statusByType,

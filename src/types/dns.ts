@@ -77,6 +77,7 @@ export interface DnsLookupResponse {
   records: DnsRecordItem[];
   recordsByType: Record<string, DnsRecordItem[]>;
   statusByType: Record<string, number>;
+  dnssecValidated?: boolean;
   emailHealth: EmailHealthSummary;
   rateLimit?: RateLimitMeta;
 }

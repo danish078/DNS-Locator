@@ -60,12 +60,12 @@ export default function WorldPropagationMap({
   }, [hoveredId, selectedRegionId, projected]);
 
   return (
-    <div className="relative w-full rounded-xl border border-slate-200 bg-[#F8FAFC] overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 border-b border-slate-200 bg-white">
-        <span className="text-xs font-medium text-slate-600">
+    <div className="relative w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
           Global Resolver Distribution
         </span>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A]" aria-hidden="true" />
             <span>Matched Consensus</span>
@@ -89,7 +89,7 @@ export default function WorldPropagationMap({
           aria-label="World map showing global DNS propagation checkpoints"
         >
           {/* Subtle latitude / longitude graticule */}
-          <g stroke="#E2E8F0" strokeWidth="0.6" strokeDasharray="2 3">
+          <g className="stroke-slate-200 dark:stroke-slate-800" strokeWidth="0.6" strokeDasharray="2 3">
             <line x1="0" y1="100" x2="800" y2="100" />
             <line x1="0" y1="200" x2="800" y2="200" />
             <line x1="0" y1="300" x2="800" y2="300" />
@@ -99,7 +99,11 @@ export default function WorldPropagationMap({
           </g>
 
           {/* Simplified Equirectangular Continental Landmasses */}
-          <g fill="#E2E8F0" stroke="#CBD5E1" strokeWidth="1" strokeLinejoin="round">
+          <g
+            className="fill-slate-200 dark:fill-slate-800 stroke-slate-300 dark:stroke-slate-700"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          >
             {/* North America */}
             <path d="M 31 55 L 78 44 L 118 42 L 176 44 L 245 40 L 270 54 L 266 78 L 246 105 L 222 145 L 204 140 L 184 142 L 194 156 L 207 154 L 216 172 L 227 182 L 218 186 L 198 172 L 167 156 L 147 132 L 138 140 L 124 111 L 116 86 L 100 71 L 66 66 L 34 68 Z" />
             {/* Greenland */}
@@ -156,7 +160,7 @@ export default function WorldPropagationMap({
                   <circle
                     r={isSelected ? 12 : 9}
                     fill={colors.ring}
-                    opacity={isSelected ? 0.95 : 0.75}
+                    opacity={isSelected ? 0.9 : 0.65}
                   />
                   <circle
                     r={isSelected ? 5.5 : 4.2}
@@ -170,8 +174,8 @@ export default function WorldPropagationMap({
         </svg>
 
         {isLoading && (
-          <div className="absolute inset-0 bg-slate-50/70 backdrop-blur-[1px] flex items-center justify-center">
-            <span className="text-xs font-medium text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-md shadow-xs">
+          <div className="absolute inset-0 bg-slate-50/70 dark:bg-slate-950/70 backdrop-blur-[1px] flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-md shadow-xs">
               Querying 18 regional DNS checkpoints…
             </span>
           </div>
@@ -179,20 +183,22 @@ export default function WorldPropagationMap({
 
         {activePin && !isLoading && (
           <div
-            className="pointer-events-none absolute z-10 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 shadow-md text-xs max-w-[260px]"
+            className="pointer-events-none absolute z-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-md text-xs max-w-[260px]"
             style={{
               left: `${Math.min(72, Math.max(4, (activePin.x / SVG_WIDTH) * 100))}%`,
               top: `${Math.min(68, Math.max(6, (activePin.y / SVG_HEIGHT) * 100))}%`,
             }}
           >
-            <div className="font-semibold text-slate-900">
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
               {activePin.region.city} · {activePin.region.countryCode}
             </div>
-            <div className="text-slate-500 mt-0.5">{activePin.region.provider}</div>
-            <div className="mt-1.5 font-mono text-[11px] text-slate-800 truncate">
+            <div className="text-slate-500 dark:text-slate-400 mt-0.5">
+              {activePin.region.provider}
+            </div>
+            <div className="mt-1.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 truncate">
               {activePin.region.primaryValue ?? activePin.region.statusLabel}
             </div>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 tabular-nums">
+            <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
               <span style={{ color: activePin.colors.fill }} className="font-medium">
                 {activePin.colors.label}
               </span>
