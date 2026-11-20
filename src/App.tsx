@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
+  ArrowRight,
   Check,
   Clock,
   Copy,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import AllRecordsResults from './components/AllRecordsResults';
 import DnsEducationGuide from './components/DnsEducationGuide';
@@ -650,15 +652,25 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Search Bar Card */}
+              {/* Search Bar Card — Hero Spotlight */}
               <form
                 onSubmit={handleSubmit}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 sm:p-4 space-y-3"
+                className="rounded-2xl border-2 border-sky-200/80 dark:border-sky-800/70 bg-gradient-to-br from-white via-sky-50/45 to-cyan-50/55 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950/40 shadow-lg shadow-sky-900/5 dark:shadow-black/30 p-6 sm:p-8 lg:p-10 space-y-5"
               >
-                <div className="flex flex-col sm:flex-row gap-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-sky-700 dark:text-sky-400">
+                    <Zap className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>{t('searchCardKicker')}</span>
+                  </div>
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {t('searchCardMeta')}
+                  </span>
+                </div>
+
+                <div className="flex flex-col lg:flex-row gap-3">
                   <div className="relative flex-1" dir="ltr">
                     <Search
-                      className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                      className="w-5 h-5 text-sky-600 dark:text-sky-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
                       aria-hidden="true"
                     />
                     <label htmlFor="domain-input" className="sr-only">
@@ -673,19 +685,19 @@ export default function App() {
                       placeholder={t('domainPlaceholder')}
                       autoComplete="off"
                       spellCheck={false}
-                      className="w-full h-11 pl-10 pr-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/70 focus:bg-white dark:focus:bg-slate-950 text-sm sm:text-base font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                      className="w-full h-14 sm:h-16 pl-12 pr-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/90 text-base sm:text-lg font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-xs focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
                     />
                     {!rawInput && (
                       <kbd
                         aria-hidden="true"
-                        className="hidden sm:inline-flex items-center justify-center px-1.5 py-0.5 text-[11px] font-mono text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                        className="hidden sm:inline-flex items-center justify-center px-2 py-1 text-xs font-mono text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"
                       >
                         /
                       </kbd>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     {/* Record Type Dropdown integrated in Search Bar */}
                     <label htmlFor="record-type-select" className="sr-only">
                       {t('recordTypeLabel')}
@@ -696,7 +708,7 @@ export default function App() {
                       value={recordType}
                       onChange={(e) => handleRecordTypeChange(e.target.value as DnsRecordType)}
                       dir="ltr"
-                      className="h-11 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/70 text-sm font-mono font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 cursor-pointer shrink-0"
+                      className="h-14 sm:h-16 min-w-[104px] px-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/90 text-sm sm:text-base font-mono font-bold text-slate-800 dark:text-slate-100 shadow-xs focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 cursor-pointer shrink-0 transition-all"
                     >
                       {PROPAGATION_RECORD_TYPES.map((type) => (
                         <option
@@ -712,9 +724,10 @@ export default function App() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="flex-1 sm:flex-initial h-11 px-6 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 disabled:opacity-60 text-white dark:text-slate-950 text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      className="flex-1 lg:flex-initial h-14 sm:h-16 px-7 sm:px-9 rounded-xl bg-gradient-to-r from-[#0284C7] to-cyan-600 hover:from-[#0369A1] hover:to-cyan-700 dark:from-sky-500 dark:to-cyan-400 dark:hover:from-sky-400 dark:hover:to-cyan-300 disabled:opacity-60 text-white dark:text-slate-950 text-base sm:text-lg font-bold shadow-md shadow-sky-600/20 dark:shadow-sky-500/15 inline-flex items-center justify-center gap-2 transition-all whitespace-nowrap shrink-0 cursor-pointer"
                     >
-                      {isLoading ? t('checkingBtn') : t('lookupBtn')}
+                      <span>{isLoading ? t('checkingBtn') : t('lookupBtn')}</span>
+                      <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden="true" />
                     </button>
 
                     {(propagationData || allRecordsData) && (
@@ -726,10 +739,10 @@ export default function App() {
                         }
                         title="Bypass 5-minute cache and fetch live records"
                         aria-label="Force refresh live DNS records"
-                        className="h-11 w-11 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white inline-flex items-center justify-center transition-colors shrink-0 disabled:opacity-50"
+                        className="h-14 sm:h-16 w-14 sm:w-16 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white inline-flex items-center justify-center transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
                       >
                         <RefreshCw
-                          className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
+                          className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}
                           aria-hidden="true"
                         />
                       </button>
@@ -738,15 +751,15 @@ export default function App() {
                 </div>
 
                 {/* Recent Searches Bar (in place of record strip) & Live Hostname Sanitization */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5 text-xs text-slate-500 dark:text-slate-400 min-h-[28px]">
-                  <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <span className="inline-flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-300 shrink-0">
-                      <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-200/70 dark:border-slate-800/80 text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[38px]">
+                  <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200 shrink-0">
+                      <Clock className="w-4 h-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
                       <span>{t('recentLabel')}</span>
                     </span>
 
                     {recentLookups.length > 0 ? (
-                      <div className="flex flex-wrap items-center gap-1.5" dir="ltr">
+                      <div className="flex flex-wrap items-center gap-2" dir="ltr">
                         {recentLookups.slice(0, 6).map((entry) => (
                           <button
                             key={`${entry.domain}-${entry.mode}-${entry.recordType ?? ''}`}
@@ -758,11 +771,11 @@ export default function App() {
                               setRecordType(nextType);
                               executeLookup(entry.domain, { targetType: nextType });
                             }}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 hover:border-sky-300 dark:hover:border-sky-700 hover:text-sky-700 dark:hover:text-sky-400 font-mono text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-white/90 dark:bg-slate-950/80 hover:border-sky-400 dark:hover:border-sky-600 hover:text-sky-700 dark:hover:text-sky-300 font-mono text-xs sm:text-sm text-slate-700 dark:text-slate-200 shadow-2xs transition-colors cursor-pointer"
                           >
                             <span>{entry.domain}</span>
                             {entry.recordType && (
-                              <span className="text-[10px] font-semibold text-sky-700 dark:text-sky-400">
+                              <span className="text-[11px] font-bold text-sky-700 dark:text-sky-400">
                                 {entry.recordType}
                               </span>
                             )}
@@ -779,7 +792,7 @@ export default function App() {
                   {((rawInput.trim() && sanitizedPreview.wasModified && sanitizedPreview.isValid) ||
                     (sanitizedPreview.isValid &&
                       sanitizedPreview.apexDomain !== sanitizedPreview.domain)) && (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0 text-xs sm:text-sm">
                       {rawInput.trim() &&
                         sanitizedPreview.wasModified &&
                         sanitizedPreview.isValid && (
