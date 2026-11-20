@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowRight,
+  ArrowUp,
   Check,
   Clock,
   Copy,
   Globe,
-  Info,
   Moon,
   RefreshCw,
   Search,
@@ -17,11 +17,13 @@ import {
   Zap,
 } from 'lucide-react';
 import AllRecordsResults from './components/AllRecordsResults';
+import CookieNoticeBanner from './components/CookieNoticeBanner';
 import DnsEducationGuide from './components/DnsEducationGuide';
 import LegalPages, { type LegalPageRoute } from './components/LegalPages';
 import OfflineIndicator from './components/OfflineIndicator';
 import PropagationResults from './components/PropagationResults';
 import PWAInstallButton from './components/PWAInstallButton';
+import { NotFoundTemplate } from './components/StatusTemplates';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import {
   addRecentLookup,
@@ -41,17 +43,21 @@ import {
   type PropagationResponse,
 } from './types/dns';
 
-type AppRoute = 'home' | LegalPageRoute;
+type AppRoute = 'home' | LegalPageRoute | 'not-found';
 type WorkspaceView = 'overview' | 'all' | 'regions';
 type ThemeMode = 'light' | 'dark';
 
 function getRouteFromPath(pathname: string): AppRoute {
   const clean = pathname.replace(/\/+$/, '') || '/';
+  if (clean === '/' || clean === '/index.html') return 'home';
   if (clean === '/about') return 'about';
+  if (clean === '/contact') return 'contact';
   if (clean === '/privacy') return 'privacy';
   if (clean === '/terms') return 'terms';
-  if (clean === '/contact') return 'contact';
-  return 'home';
+  if (clean === '/disclaimer') return 'disclaimer';
+  if (clean === '/cookies-policy') return 'cookies-policy';
+  if (clean === '/cookies-notice') return 'cookies-notice';
+  return 'not-found';
 }
 
 function getInitialTheme(): ThemeMode {
@@ -68,9 +74,11 @@ export default function App() {
   const [route, setRoute] = useState<AppRoute>(() =>
     getRouteFromPath(window.location.pathname)
   );
+  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [view, setView] = useState<WorkspaceView>('overview');
-  const [rotatingLegalTab, setRotatingLegalTab] = useState<'about' | 'privacy'>('about');
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [consentVersion, setConsentVersion] = useState(0);
   const [rawInput, setRawInput] = useState('');
   const [recordType, setRecordType] = useState<DnsRecordType>('A');
   const [expectedValue, setExpectedValue] = useState('');
@@ -100,12 +108,14 @@ export default function App() {
     [rawInput, recordType]
   );
 
-  // Rotate header legal button between "About" and "Privacy Policy" every 3 seconds
+  // Track scroll depth to reveal the Move to Top button
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setRotatingLegalTab((prev) => (prev === 'about' ? 'privacy' : 'about'));
-    }, 3000);
-    return () => window.clearInterval(interval);
+    const onScroll = () => {
+      setShowScrollTop(window.scrollY > 320);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   // Sync theme class, localStorage, and theme-color meta tag
@@ -153,19 +163,20 @@ export default function App() {
   // Sync browser back/forward navigation
   useEffect(() => {
     const onPopState = () => {
+      setCurrentPath(window.location.pathname);
       setRoute(getRouteFromPath(window.location.pathname));
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // SEO Protection: apply noindex on dynamic ?domain= query URLs & keep canonical pointed at root
+  // SEO Protection: apply noindex on dynamic ?domain= query URLs or 404 routes & sync canonical + OG URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hasQueryDomain = params.has('domain') || params.has('q');
 
     let robotsMeta = document.querySelector('meta[name="robots"]');
-    if (hasQueryDomain) {
+    if (hasQueryDomain || route === 'not-found') {
       if (!robotsMeta) {
         robotsMeta = document.createElement('meta');
         robotsMeta.setAttribute('name', 'robots');
@@ -182,15 +193,25 @@ export default function App() {
       canonical.setAttribute('rel', 'canonical');
       document.head.appendChild(canonical);
     }
-    const cleanPath = route === 'home' ? '/' : `/${route}`;
-    canonical.setAttribute('href', `${window.location.origin}${cleanPath}`);
+    const cleanPath = route === 'home' || route === 'not-found' ? '/' : `/${route}`;
+    const canonicalUrl = `${window.location.origin}${cleanPath}`;
+    canonical.setAttribute('href', canonicalUrl);
+
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) {
+      ogUrl.setAttribute('content', canonicalUrl);
+    }
 
     const titles: Record<AppRoute, string> = {
-      home: 'dnslocator.online – Global DNS Propagation & Record Lookup',
-      about: 'About – dnslocator.online',
-      privacy: 'Privacy Policy – dnslocator.online',
-      terms: 'Terms of Service – dnslocator.online',
-      contact: 'Contact – dnslocator.online',
+      home: 'DNS Locator – Global DNS Propagation & Record Lookup',
+      about: 'About – DNS Locator',
+      contact: 'Contact – DNS Locator',
+      privacy: 'Privacy Policy & GDPR – DNS Locator',
+      terms: 'Terms and Conditions – DNS Locator',
+      disclaimer: 'Disclaimer – DNS Locator',
+      'cookies-policy': 'Cookies Policy – DNS Locator',
+      'cookies-notice': 'Cookies Notice – DNS Locator',
+      'not-found': 'Page Not Found – DNS Locator',
     };
     document.title = titles[route];
   }, [route, propagationData, allRecordsData]);
@@ -198,6 +219,7 @@ export default function App() {
   const navigate = useCallback((nextRoute: AppRoute, hash?: string) => {
     const nextPath = nextRoute === 'home' ? '/' : `/${nextRoute}`;
     window.history.pushState({}, '', `${nextPath}${hash ?? ''}`);
+    setCurrentPath(nextPath);
     setRoute(nextRoute);
     if (hash) {
       setTimeout(() => {
@@ -412,35 +434,31 @@ export default function App() {
   const combinedPropError = inputError ?? propError;
   const combinedAllError = inputError ?? allError;
 
-  const isRotatingActive =
-    (rotatingLegalTab === 'about' && route === 'about') ||
-    (rotatingLegalTab === 'privacy' && route === 'privacy');
-
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100 transition-colors">
       {/* Strict 3-Zone Top Bar Contract */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-6">
-          {/* Zone 1: Brand mark & wordmark */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-[68px] flex items-center justify-between gap-4 sm:gap-6">
+          {/* Zone 1: Brand mark & larger wordmark */}
           <a
             href="/"
             onClick={(e) => {
               e.preventDefault();
               navigate('home');
             }}
-            className="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 font-[var(--font-display)]"
+            className="inline-flex items-center gap-2.5 sm:gap-3 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 font-[var(--font-display)]"
           >
             <img
               src="/favicon.svg"
               alt=""
-              width={24}
-              height={24}
-              className="w-6 h-6 shrink-0"
+              width={32}
+              height={32}
+              className="w-7 h-7 sm:w-8 sm:h-8 shrink-0"
             />
-            <span>dnslocator.online</span>
+            <span>DNS Locator</span>
           </a>
 
-          {/* Zone 2: 4 concise single-line text links (including 3s rotating About / Privacy Policy button) */}
+          {/* Zone 2: Concise navigation links (legal pages moved to footer) */}
           <nav
             aria-label="Primary navigation"
             className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300"
@@ -480,30 +498,6 @@ export default function App() {
             >
               {t('navDnsGuide')}
             </button>
-            <button
-              type="button"
-              onClick={() => navigate(rotatingLegalTab)}
-              aria-label={
-                rotatingLegalTab === 'about' ? t('navAbout') : t('navPrivacy')
-              }
-              className={`inline-flex items-center justify-center gap-1.5 min-w-[126px] h-8 px-3 rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                isRotatingActive
-                  ? 'border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-semibold'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-200 hover:border-sky-300 dark:hover:border-sky-700 hover:text-sky-700 dark:hover:text-sky-300'
-              }`}
-            >
-              {rotatingLegalTab === 'about' ? (
-                <>
-                  <Info className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span>{t('navAbout')}</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span>{t('navPrivacy')}</span>
-                </>
-              )}
-            </button>
           </nav>
 
           {/* Zone 3: 1 primary action */}
@@ -542,11 +536,18 @@ export default function App() {
           </div>
         )}
 
-        {route !== 'home' ? (
+        {route === 'not-found' ? (
+          <NotFoundTemplate
+            pathname={currentPath}
+            onNavigateHome={() => navigate('home')}
+            onNavigatePage={(p) => navigate(p)}
+          />
+        ) : route !== 'home' ? (
           <LegalPages
             page={route}
             onNavigateHome={() => navigate('home')}
             onNavigatePage={(p) => navigate(p)}
+            onConsentChanged={() => setConsentVersion((v) => v + 1)}
           />
         ) : (
           <>
@@ -566,27 +567,8 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* English Revert (only after IP regional translation) + Theme Switcher + Cache */}
+                {/* English Revert (only after IP regional translation) + Icon-only Theme Switcher + Cache */}
                 <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
-                  {/* Mobile Rotating About / Privacy Policy Button */}
-                  <button
-                    type="button"
-                    onClick={() => navigate(rotatingLegalTab)}
-                    className="md:hidden h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                  >
-                    {rotatingLegalTab === 'about' ? (
-                      <>
-                        <Info className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-                        <span>{t('navAbout')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
-                        <span>{t('navPrivacy')}</span>
-                      </>
-                    )}
-                  </button>
-
                   {/* Show English button only after language has been switched from English via IP */}
                   {lang !== 'en' && (
                     <button
@@ -598,24 +580,18 @@ export default function App() {
                     </button>
                   )}
 
-                  {/* Light / Dark Mode Switch */}
+                  {/* Icon-only Light / Dark Mode Switch */}
                   <button
                     type="button"
                     onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
                     aria-label={theme === 'dark' ? t('lightMode') : t('darkMode')}
                     title={theme === 'dark' ? t('lightMode') : t('darkMode')}
-                    className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 inline-flex items-center justify-center transition-colors shrink-0 cursor-pointer"
                   >
                     {theme === 'dark' ? (
-                      <>
-                        <Sun className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-                        <span>{t('lightMode')}</span>
-                      </>
+                      <Sun className="w-4 h-4 text-amber-400" aria-hidden="true" />
                     ) : (
-                      <>
-                        <Moon className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
-                        <span>{t('darkMode')}</span>
-                      </>
+                      <Moon className="w-4 h-4 text-slate-600" aria-hidden="true" />
                     )}
                   </button>
 
@@ -655,7 +631,7 @@ export default function App() {
               {/* Search Bar Card — Hero Spotlight */}
               <form
                 onSubmit={handleSubmit}
-                className="rounded-2xl border-2 border-sky-200/80 dark:border-sky-800/70 bg-gradient-to-br from-white via-sky-50/45 to-cyan-50/55 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950/40 shadow-lg shadow-sky-900/5 dark:shadow-black/30 p-6 sm:p-8 lg:p-10 space-y-5"
+                className="rounded-2xl border-2 border-sky-200/80 dark:border-sky-800/70 bg-gradient-to-br from-white via-sky-50/45 to-cyan-50/55 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950/40 shadow-lg shadow-sky-900/5 dark:shadow-black/30 p-4 sm:p-8 lg:p-10 space-y-4 sm:space-y-5"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-sky-700 dark:text-sky-400">
@@ -667,10 +643,10 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-3">
-                  <div className="relative flex-1" dir="ltr">
+                <div className="flex flex-col lg:flex-row gap-2.5 sm:gap-3">
+                  <div className="relative flex-1 min-w-0" dir="ltr">
                     <Search
-                      className="w-5 h-5 text-sky-600 dark:text-sky-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+                      className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600 dark:text-sky-400 absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 pointer-events-none"
                       aria-hidden="true"
                     />
                     <label htmlFor="domain-input" className="sr-only">
@@ -685,7 +661,7 @@ export default function App() {
                       placeholder={t('domainPlaceholder')}
                       autoComplete="off"
                       spellCheck={false}
-                      className="w-full h-14 sm:h-16 pl-12 pr-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/90 text-base sm:text-lg font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-xs focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+                      className="w-full h-12 sm:h-15 pl-10 sm:pl-12 pr-4 sm:pr-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/90 text-sm sm:text-lg font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-xs focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
                     />
                     {!rawInput && (
                       <kbd
@@ -697,8 +673,8 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    {/* Record Type Dropdown integrated in Search Bar */}
+                  <div className="flex flex-nowrap items-center gap-1.5 sm:gap-3 shrink-0 w-full lg:w-auto">
+                    {/* Record Type Dropdown integrated in Search Bar — compact on phone screens */}
                     <label htmlFor="record-type-select" className="sr-only">
                       {t('recordTypeLabel')}
                     </label>
@@ -708,7 +684,7 @@ export default function App() {
                       value={recordType}
                       onChange={(e) => handleRecordTypeChange(e.target.value as DnsRecordType)}
                       dir="ltr"
-                      className="h-14 sm:h-16 min-w-[104px] px-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/90 text-sm sm:text-base font-mono font-bold text-slate-800 dark:text-slate-100 shadow-xs focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 cursor-pointer shrink-0 transition-all"
+                      className="h-11 sm:h-15 w-[78px] sm:w-auto sm:min-w-[104px] px-2 sm:px-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/90 text-xs sm:text-base font-mono font-bold text-slate-800 dark:text-slate-100 shadow-xs focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 cursor-pointer shrink-0 transition-all"
                     >
                       {PROPAGATION_RECORD_TYPES.map((type) => (
                         <option
@@ -724,10 +700,10 @@ export default function App() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="flex-1 lg:flex-initial h-14 sm:h-16 px-7 sm:px-9 rounded-xl bg-gradient-to-r from-[#0284C7] to-cyan-600 hover:from-[#0369A1] hover:to-cyan-700 dark:from-sky-500 dark:to-cyan-400 dark:hover:from-sky-400 dark:hover:to-cyan-300 disabled:opacity-60 text-white dark:text-slate-950 text-base sm:text-lg font-bold shadow-md shadow-sky-600/20 dark:shadow-sky-500/15 inline-flex items-center justify-center gap-2 transition-all whitespace-nowrap shrink-0 cursor-pointer"
+                      className="flex-1 lg:flex-initial min-w-0 h-11 sm:h-15 px-3 sm:px-8 rounded-xl bg-gradient-to-r from-[#0284C7] to-cyan-600 hover:from-[#0369A1] hover:to-cyan-700 dark:from-sky-500 dark:to-cyan-400 dark:hover:from-sky-400 dark:hover:to-cyan-300 disabled:opacity-60 text-white dark:text-slate-950 text-xs sm:text-base font-bold shadow-md shadow-sky-600/20 dark:shadow-sky-500/15 inline-flex items-center justify-center gap-1.5 sm:gap-2 transition-all whitespace-nowrap cursor-pointer"
                     >
                       <span>{isLoading ? t('checkingBtn') : t('lookupBtn')}</span>
-                      <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden="true" />
+                      <ArrowRight className="w-3.5 h-3.5 sm:w-5 sm:h-5 shrink-0" aria-hidden="true" />
                     </button>
 
                     {(propagationData || allRecordsData) && (
@@ -739,10 +715,10 @@ export default function App() {
                         }
                         title="Bypass 5-minute cache and fetch live records"
                         aria-label="Force refresh live DNS records"
-                        className="h-14 sm:h-16 w-14 sm:w-16 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white inline-flex items-center justify-center transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
+                        className="h-11 w-11 sm:h-15 sm:w-15 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white inline-flex items-center justify-center transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
                       >
                         <RefreshCw
-                          className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}
+                          className={`w-4 h-4 sm:w-5 sm:h-5 ${isLoading ? 'animate-spin' : ''}`}
                           aria-hidden="true"
                         />
                       </button>
@@ -1089,47 +1065,91 @@ export default function App() {
         )}
       </main>
 
-      {/* Compliant Trust Footer */}
+      {/* Compliant Trust Footer with all 7 pages */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400">
           <div className="space-y-1">
-            <p className="font-medium text-slate-700 dark:text-slate-200">
+            <p className="font-semibold text-slate-700 dark:text-slate-200">
               {t('footerTagline')}
             </p>
             <p>{t('footerDisclaimer')}</p>
           </div>
-          <nav aria-label="Footer legal links" className="flex flex-wrap items-center gap-5 shrink-0">
+          <nav
+            aria-label="Footer legal and policy links"
+            className="flex flex-wrap items-center gap-x-5 gap-y-2 shrink-0"
+          >
             <button
               type="button"
               onClick={() => navigate('about')}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
             >
               {t('navAbout')}
             </button>
             <button
               type="button"
+              onClick={() => navigate('contact')}
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
+            >
+              {t('navContact')}
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('privacy')}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
             >
               {t('navPrivacy')}
             </button>
             <button
               type="button"
               onClick={() => navigate('terms')}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
             >
               {t('navTerms')}
             </button>
             <button
               type="button"
-              onClick={() => navigate('contact')}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
+              onClick={() => navigate('disclaimer')}
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
             >
-              {t('navContact')}
+              {t('navDisclaimer')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('cookies-policy')}
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
+            >
+              {t('navCookiesPolicy')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('cookies-notice')}
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
+            >
+              {t('navCookiesNotice')}
             </button>
           </nav>
         </div>
       </footer>
+
+      {/* Move to Top Button */}
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Move to top"
+          title="Move to top"
+          className="fixed bottom-5 right-5 z-40 w-10 h-10 rounded-full border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 hover:bg-sky-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-sky-700 dark:hover:text-sky-400 shadow-lg backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer"
+        >
+          <ArrowUp className="w-4 h-4" aria-hidden="true" />
+        </button>
+      )}
+
+      {/* EU GDPR Cookie Notice Banner */}
+      <CookieNoticeBanner
+        consentVersion={consentVersion}
+        onNavigatePage={(p) => navigate(p)}
+        onConsentSaved={() => setConsentVersion((v) => v + 1)}
+      />
 
       <OfflineIndicator />
     </div>

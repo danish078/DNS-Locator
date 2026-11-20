@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import express, { type Request, type Response } from 'express';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
@@ -1047,9 +1048,12 @@ async function startServer() {
         'User-agent: *',
         'Allow: /',
         'Allow: /about',
+        'Allow: /contact',
         'Allow: /privacy',
         'Allow: /terms',
-        'Allow: /contact',
+        'Allow: /disclaimer',
+        'Allow: /cookies-policy',
+        'Allow: /cookies-notice',
         'Disallow: /*?domain=*',
         'Disallow: /*?q=*',
         'Disallow: /api/',
@@ -1064,7 +1068,16 @@ async function startServer() {
     const origin =
       process.env.APP_URL?.replace(/\/$/, '') ||
       `${req.protocol}://${req.get('host') || 'dnslocator.online'}`;
-    const pages = ['/', '/about', '/privacy', '/terms', '/contact'];
+    const pages = [
+      '/',
+      '/about',
+      '/contact',
+      '/privacy',
+      '/terms',
+      '/disclaimer',
+      '/cookies-policy',
+      '/cookies-notice',
+    ];
     const today = new Date().toISOString().split('T')[0];
     const urls = pages
       .map(
@@ -1397,11 +1410,20 @@ async function startServer() {
     });
   });
 
+  const httpServer = http.createServer(app);
+
   // Vite dev middleware or production static assets
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: false,
+        ws: {
+          server: httpServer,
+        },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -1419,7 +1441,7 @@ async function startServer() {
   }
 
   const port = Number(process.env.PORT) || 3000;
-  app.listen(port, '0.0.0.0', () => {
+  httpServer.listen(port, '0.0.0.0', () => {
     console.log(`dnslocator.online server listening on http://0.0.0.0:${port}`);
   });
 }

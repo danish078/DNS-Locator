@@ -63,7 +63,7 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
                     id="pwa-install-title"
                     className="text-base font-bold text-slate-900 dark:text-slate-100"
                   >
-                    Install dnslocator.online
+                    Install DNS Locator
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Use as a standalone app on mobile and desktop
@@ -89,7 +89,7 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
                 <ol className="list-decimal list-inside space-y-1 text-xs leading-relaxed">
                   <li>Tap the <strong>Share</strong> icon in Safari&apos;s toolbar.</li>
                   <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
-                  <li>Tap <strong>Add</strong> to launch dnslocator.online full-screen.</li>
+                  <li>Tap <strong>Add</strong> to launch DNS Locator full-screen.</li>
                 </ol>
               </div>
             ) : (
@@ -100,7 +100,7 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
                     <span>Desktop (Windows, macOS, Linux)</span>
                   </div>
                   <p className="leading-relaxed">
-                    In <strong>Chrome</strong> or <strong>Edge</strong>, click the install icon in the right side of the address bar (or open the browser menu and select <strong>Install dnslocator.online</strong>). In <strong>Safari on macOS</strong>, choose <strong>File → Add to Dock</strong>.
+                    In <strong>Chrome</strong> or <strong>Edge</strong>, click the install icon in the right side of the address bar (or open the browser menu and select <strong>Install DNS Locator</strong>). In <strong>Safari on macOS</strong>, choose <strong>File → Add to Dock</strong>.
                   </p>
                 </div>
 

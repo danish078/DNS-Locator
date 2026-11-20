@@ -87,15 +87,15 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What should I do before migrating a website to minimize downtime?',
-    a: 'Lower the TTL on your existing A, AAAA, CNAME, and MX records to 300 seconds (5 minutes) at least 24 hours before the cutover. Once propagation completes, verify all regions on dnslocator.online before raising the TTL back to 3600 seconds.',
+    a: 'Lower the TTL on your existing A, AAAA, CNAME, and MX records to 300 seconds (5 minutes) at least 24 hours before the cutover. Once propagation completes, verify all regions on DNS Locator before raising the TTL back to 3600 seconds.',
   },
   {
     q: 'Why are my emails bouncing or landing in spam even though MX records exist?',
     a: 'Inbound mail relies on MX records, while outbound deliverability depends on matching TXT records for SPF (v=spf1), DKIM selector keys, and a _dmarc policy. Use the All Records view above to confirm MX, SPF, and _dmarc are all present and properly formatted.',
   },
   {
-    q: 'Is dnslocator.online affiliated with ICANN or any domain registrar?',
-    a: 'No. dnslocator.online is an independent public diagnostic utility. It queries publicly available DNS records via public DNS over HTTPS and regional resolvers and is not affiliated with ICANN, IANA, or domain registrars.',
+    q: 'Is DNS Locator affiliated with ICANN or any domain registrar?',
+    a: 'No. DNS Locator is an independent public diagnostic utility. It queries publicly available DNS records via public DNS over HTTPS and regional resolvers and is not affiliated with ICANN, IANA, or domain registrars.',
   },
 ];
 

@@ -796,9 +796,12 @@ export default {
           'User-agent: *',
           'Allow: /',
           'Allow: /about',
+          'Allow: /contact',
           'Allow: /privacy',
           'Allow: /terms',
-          'Allow: /contact',
+          'Allow: /disclaimer',
+          'Allow: /cookies-policy',
+          'Allow: /cookies-notice',
           'Disallow: /*?domain=*',
           'Disallow: /*?q=*',
           'Disallow: /api/',
@@ -810,7 +813,16 @@ export default {
     }
 
     if (url.pathname === '/sitemap.xml') {
-      const pages = ['/', '/about', '/privacy', '/terms', '/contact'];
+      const pages = [
+        '/',
+        '/about',
+        '/contact',
+        '/privacy',
+        '/terms',
+        '/disclaimer',
+        '/cookies-policy',
+        '/cookies-notice',
+      ];
       const today = new Date().toISOString().split('T')[0];
       const urls = pages
         .map(

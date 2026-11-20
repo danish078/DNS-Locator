@@ -20,11 +20,12 @@ export default defineConfig(() => {
           'icon-512.png',
           'pwa-maskable-512x512.png',
           'logo.svg',
+          'og-image.jpg',
         ],
         manifest: {
           id: '/',
-          name: 'dnslocator.online',
-          short_name: 'dnslocator',
+          name: 'DNS Locator',
+          short_name: 'DNS Locator',
           description:
             'Global DNS Propagation & Record Lookup — Verify live DNS records across 18 regions in seconds.',
           theme_color: '#0F172A',
