@@ -102,7 +102,7 @@ const GLOBAL_CHECKPOINTS: RegionalCheckpointDef[] = [
     continent: 'North America',
     lat: 37.3382,
     lng: -121.8863,
-    provider: 'Cloudflare 1.1.1.1',
+    provider: 'Public 1.1.1.1 Anycast',
     mode: 'cloudflare-json',
     endpoint: 'https://cloudflare-dns.com/dns-query',
   },
@@ -881,11 +881,148 @@ class TtlMemoryCache<T> {
 }
 
 function getClientIp(req: Request): string {
+  const cfIp = req.headers['cf-connecting-ip'];
+  if (typeof cfIp === 'string' && cfIp.trim()) {
+    return cfIp.trim();
+  }
   const fwd = req.headers['x-forwarded-for'];
   if (typeof fwd === 'string' && fwd.trim()) {
     return fwd.split(',')[0].trim();
   }
-  return req.ip || req.socket.remoteAddress || '127.0.0.1';
+  const raw = req.ip || req.socket.remoteAddress || '127.0.0.1';
+  return raw.startsWith('::ffff:') ? raw.slice(7) : raw;
+}
+
+type RegionalLangCode = 'en' | 'es' | 'fr' | 'de' | 'pt' | 'ru';
+
+const COUNTRY_TO_REGIONAL_LANG: Record<string, RegionalLangCode> = {
+  // Spanish
+  ES: 'es',
+  MX: 'es',
+  AR: 'es',
+  CO: 'es',
+  CL: 'es',
+  PE: 'es',
+  VE: 'es',
+  EC: 'es',
+  GT: 'es',
+  CU: 'es',
+  BO: 'es',
+  DO: 'es',
+  HN: 'es',
+  PY: 'es',
+  SV: 'es',
+  NI: 'es',
+  CR: 'es',
+  PA: 'es',
+  UY: 'es',
+  GQ: 'es',
+  // French
+  FR: 'fr',
+  BE: 'fr',
+  MC: 'fr',
+  LU: 'fr',
+  SN: 'fr',
+  CI: 'fr',
+  CM: 'fr',
+  CD: 'fr',
+  MG: 'fr',
+  ML: 'fr',
+  BF: 'fr',
+  NE: 'fr',
+  TG: 'fr',
+  BJ: 'fr',
+  GA: 'fr',
+  CG: 'fr',
+  HT: 'fr',
+  // German
+  DE: 'de',
+  AT: 'de',
+  CH: 'de',
+  LI: 'de',
+  // Portuguese
+  BR: 'pt',
+  PT: 'pt',
+  AO: 'pt',
+  MZ: 'pt',
+  CV: 'pt',
+  // Russian
+  RU: 'ru',
+  BY: 'ru',
+};
+
+function isPrivateOrLoopbackIp(ip: string): boolean {
+  const clean = ip.trim().toLowerCase();
+  if (!clean || clean === '::1' || clean === 'localhost') return true;
+  if (clean.startsWith('127.') || clean.startsWith('10.') || clean.startsWith('192.168.')) {
+    return true;
+  }
+  const match172 = clean.match(/^172\.(\d+)\./);
+  if (match172 && Number(match172[1]) >= 16 && Number(match172[1]) <= 31) {
+    return true;
+  }
+  if (clean.startsWith('fc') || clean.startsWith('fd') || clean.startsWith('fe80:')) {
+    return true;
+  }
+  return false;
+}
+
+function mapCountryToLang(countryCode: string | null | undefined): RegionalLangCode {
+  if (!countryCode) return 'en';
+  return COUNTRY_TO_REGIONAL_LANG[countryCode.trim().toUpperCase()] ?? 'en';
+}
+
+const geoIpCache = new Map<string, { countryCode: string | null; expiresAt: number }>();
+
+async function lookupCountryByIp(ip: string): Promise<string | null> {
+  const cached = geoIpCache.get(ip);
+  if (cached && Date.now() <= cached.expiresAt) {
+    return cached.countryCode;
+  }
+
+  let countryCode: string | null = null;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1800);
+    const res = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}?fields=success,country_code`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = (await res.json()) as { success?: boolean; country_code?: string };
+      if (data.success && typeof data.country_code === 'string' && data.country_code.length === 2) {
+        countryCode = data.country_code.toUpperCase();
+      }
+    }
+  } catch {
+    // Try fallback IP geolocation provider
+  }
+
+  if (!countryCode) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1800);
+      const res = await fetch(`https://get.geojs.io/v1/ip/country/${encodeURIComponent(ip)}.json`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = (await res.json()) as { country?: string };
+        if (typeof data.country === 'string' && data.country.length === 2 && data.country !== 'nil') {
+          countryCode = data.country.toUpperCase();
+        }
+      }
+    } catch {
+      // Ignore fallback timeout
+    }
+  }
+
+  if (geoIpCache.size > 2000) {
+    geoIpCache.clear();
+  }
+  geoIpCache.set(ip, { countryCode, expiresAt: Date.now() + 60 * 60 * 1000 });
+  return countryCode;
 }
 
 // --- Express App ---
@@ -946,7 +1083,43 @@ async function startServer() {
     res.json({ ok: true, service: 'dnslocator.online', regions: GLOBAL_CHECKPOINTS.length });
   });
 
-  // All-Record Parallel Lookup via Cloudflare 1.1.1.1 DoH JSON API
+  // IP-based Regional Language Detection
+  app.get('/api/geo-lang', async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const headerCountryRaw =
+      req.headers['cf-ipcountry'] ||
+      req.headers['x-appengine-country'] ||
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['x-country-code'];
+    const headerCountry =
+      typeof headerCountryRaw === 'string' ? headerCountryRaw.trim().toUpperCase() : '';
+
+    if (headerCountry && /^[A-Z]{2}$/.test(headerCountry) && headerCountry !== 'XX' && headerCountry !== 'ZZ' && headerCountry !== 'T1') {
+      return res.json({
+        countryCode: headerCountry,
+        lang: mapCountryToLang(headerCountry),
+        source: 'edge-header',
+      });
+    }
+
+    const ip = getClientIp(req);
+    if (isPrivateOrLoopbackIp(ip)) {
+      return res.json({
+        countryCode: null,
+        lang: null,
+        source: 'private-ip',
+      });
+    }
+
+    const countryCode = await lookupCountryByIp(ip);
+    return res.json({
+      countryCode,
+      lang: countryCode ? mapCountryToLang(countryCode) : null,
+      source: countryCode ? 'ip-lookup' : 'unavailable',
+    });
+  });
+
+  // All-Record Parallel Lookup via Public 1.1.1.1 DoH JSON API
   app.get('/api/dns', async (req: Request, res: Response) => {
     const ip = getClientIp(req);
     const rate = dnsRateLimiter.check(ip);
@@ -1040,7 +1213,7 @@ async function startServer() {
         queriedAt: new Date().toISOString(),
         cached: false,
         queryTimeMs,
-        resolver: 'Cloudflare 1.1.1.1 DoH',
+        resolver: 'Public 1.1.1.1 DoH',
         dnssecValidated,
         records,
         recordsByType,
@@ -1066,7 +1239,7 @@ async function startServer() {
       });
     } catch {
       return res.status(502).json({
-        error: 'Unable to reach Cloudflare DoH resolver right now. Please retry shortly.',
+        error: 'Unable to reach public DoH resolver right now. Please retry shortly.',
       });
     }
   });

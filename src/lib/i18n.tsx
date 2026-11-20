@@ -27,54 +27,70 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
 ];
 
 const LANG_STORAGE_KEY = 'dnslocator_lang';
+const LANG_ENGLISH_OVERRIDE_KEY = 'dnslocator_lang_english_override';
 
 const SUPPORTED_CODE_SET = new Set<string>(SUPPORTED_LANGUAGES.map((l) => l.code));
 
-const TIMEZONE_TO_LANG: Record<string, SupportedLang> = {
-  'Europe/Paris': 'fr',
-  'Europe/Brussels': 'fr',
-  'Europe/Berlin': 'de',
-  'Europe/Zurich': 'de',
-  'Europe/Vienna': 'de',
-  'Europe/Madrid': 'es',
-  'America/Mexico_City': 'es',
-  'America/Buenos_Aires': 'es',
-  'America/Argentina/Buenos_Aires': 'es',
-  'America/Bogota': 'es',
-  'America/Santiago': 'es',
-  'America/Lima': 'es',
-  'America/Sao_Paulo': 'pt',
-  'Europe/Lisbon': 'pt',
-  'Europe/Moscow': 'ru',
+const COUNTRY_TO_LANG: Record<string, SupportedLang> = {
+  // Spanish
+  ES: 'es',
+  MX: 'es',
+  AR: 'es',
+  CO: 'es',
+  CL: 'es',
+  PE: 'es',
+  VE: 'es',
+  EC: 'es',
+  GT: 'es',
+  CU: 'es',
+  BO: 'es',
+  DO: 'es',
+  HN: 'es',
+  PY: 'es',
+  SV: 'es',
+  NI: 'es',
+  CR: 'es',
+  PA: 'es',
+  UY: 'es',
+  GQ: 'es',
+  // French
+  FR: 'fr',
+  BE: 'fr',
+  MC: 'fr',
+  LU: 'fr',
+  SN: 'fr',
+  CI: 'fr',
+  CM: 'fr',
+  CD: 'fr',
+  MG: 'fr',
+  ML: 'fr',
+  BF: 'fr',
+  NE: 'fr',
+  TG: 'fr',
+  BJ: 'fr',
+  GA: 'fr',
+  CG: 'fr',
+  HT: 'fr',
+  // German
+  DE: 'de',
+  AT: 'de',
+  CH: 'de',
+  LI: 'de',
+  // Portuguese
+  BR: 'pt',
+  PT: 'pt',
+  AO: 'pt',
+  MZ: 'pt',
+  CV: 'pt',
+  // Russian
+  RU: 'ru',
+  BY: 'ru',
 };
 
-export function detectRegionalLanguage(): SupportedLang {
-  if (typeof window === 'undefined') return 'en';
-
-  // 1. Check navigator.languages (explicit regional languages ordered by preference)
-  const navLangs = Array.isArray(navigator.languages) && navigator.languages.length > 0
-    ? navigator.languages
-    : [navigator.language];
-
-  for (const raw of navLangs) {
-    if (!raw) continue;
-    const base = raw.toLowerCase().split('-')[0];
-    if (base !== 'en' && SUPPORTED_CODE_SET.has(base)) {
-      return base as SupportedLang;
-    }
-  }
-
-  // 2. Check regional timezone hint when browser locale defaults to generic English
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz && TIMEZONE_TO_LANG[tz]) {
-      return TIMEZONE_TO_LANG[tz];
-    }
-  } catch {
-    // Ignore Intl errors
-  }
-
-  return 'en';
+function mapCountryToSupportedLang(countryCode: string | null | undefined): SupportedLang {
+  if (!countryCode) return 'en';
+  const mapped = COUNTRY_TO_LANG[countryCode.trim().toUpperCase()];
+  return mapped && SUPPORTED_CODE_SET.has(mapped) ? mapped : 'en';
 }
 
 const EN_TRANSLATIONS = {
@@ -92,16 +108,18 @@ const EN_TRANSLATIONS = {
   shareLink: 'Share Link',
   linkCopied: 'Link Copied',
   englishBtn: 'English',
-  languageLabel: 'Language',
 
   // Hero & Search
   heroTitle: 'Global DNS Propagation & Record Lookup',
+  heroSubtitle: 'Verify live DNS records across 18 global regions in seconds.',
   domainPlaceholder: 'Enter domain or paste URL (e.g., https://example.com/pricing)',
+  recordTypeLabel: 'DNS Record Type',
   lookupBtn: 'Lookup',
   checkingBtn: 'Checking…',
   hostnameLabel: 'Hostname:',
   checkApex: 'Check apex',
-  recentLabel: 'Recent:',
+  recentLabel: 'Recent searches:',
+  noRecentSearches: 'No recent searches yet.',
 
   // Workspace Views
   tabOverview: 'Overview',
@@ -127,7 +145,7 @@ const EN_TRANSLATIONS = {
     'Enter a domain above to inspect every DNS record type and verify how 18 worldwide checkpoints resolve your domain in real time.',
   featCheckpointsTitle: '18 Worldwide Checkpoints',
   featCheckpointsDesc:
-    'Queries Cloudflare 1.1.1.1, AdGuard, Control D, AliDNS, IIJ Tokyo, TWNIC, DNS.SB, and regional Google ECS nodes.',
+    'Queries 1.1.1.1 Anycast, Google Public DNS, AdGuard, Control D, AliDNS, IIJ Tokyo, TWNIC, and DNS.SB regional nodes.',
   featExpectedTitle: 'Expected Value Matching',
   featExpectedDesc:
     'Compare resolved records across regions or paste your target IP to track rollout completion.',
@@ -148,9 +166,9 @@ const EN_TRANSLATIONS = {
   propagationSuffix: 'Propagation',
 
   // All Records Table
-  allRecordsTitle: 'Parallel All-Record Zone Inspector (Cloudflare 1.1.1.1 DoH)',
+  allRecordsTitle: 'Parallel All-Record Zone Inspector (DoH)',
   allRecordsDesc:
-    "Simultaneously queries A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, and DMARC records via Cloudflare's DNS over HTTPS JSON API.",
+    'Simultaneously queries A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, and DMARC records via DNS over HTTPS.',
   readyZoneLookup: 'Ready for parallel zone lookup',
   readyZoneLookupDesc:
     'Enter any domain or URL above. Results include record values, TTL durations, MX priorities, DNSSEC validation, and SPF/DMARC verification.',
@@ -186,15 +204,15 @@ const EN_TRANSLATIONS = {
   aboutP1:
     'dnslocator.online is a free, lightweight Node.js web utility built for developers, system administrators, and website owners who need fast visibility into public DNS records and worldwide DNS propagation.',
   aboutP2:
-    "In Global Propagation mode, our backend dispatches simultaneous queries across 18 geographically distributed DNS checkpoints—spanning North America, South America, Europe, Asia-Pacific, Oceania, and Africa—using public DNS over HTTPS (DoH) resolvers and regional EDNS Client Subnet (ECS) routing. In All Records mode, dnslocator.online queries A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, and _dmarc records in parallel via Cloudflare's public 1.1.1.1 DoH JSON resolver.",
+    'In Global Propagation mode, our backend dispatches simultaneous queries across 18 geographically distributed DNS checkpoints—spanning North America, South America, Europe, Asia-Pacific, Oceania, and Africa—using public DNS over HTTPS (DoH) resolvers and regional EDNS Client Subnet (ECS) routing. In All Records mode, dnslocator.online queries A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, and _dmarc records in parallel via a public 1.1.1.1 DoH JSON resolver.',
   nonAffiliationTitle: 'Non-Affiliation Notice',
   nonAffiliationBody:
-    'dnslocator.online displays publicly available DNS zone records only. We are not affiliated with, endorsed by, or connected to ICANN, IANA, Cloudflare, Google, or any domain name registrar.',
+    'dnslocator.online displays publicly available DNS zone records only. We are not affiliated with, endorsed by, or connected to ICANN, IANA, or any domain name registrar.',
   privacyTitle: 'Privacy Policy',
   effectiveDate: 'Effective Date: November 2026',
   privacyS1Title: '1. DNS Query Transmission & Third-Party Resolvers',
   privacyS1Body:
-    "When you submit a domain name or IP address on dnslocator.online, the queried hostname is transmitted from our server to Cloudflare's public 1.1.1.1 DNS over HTTPS (DoH) resolver (cloudflare-dns.com) and to our configured regional public DNS resolvers (including Google Public DNS, AdGuard DNS, Control D, DNS.SB, IIJ Public DNS, TWNIC Quad101, and AliDNS) solely to retrieve public DNS records on your behalf.",
+    'When you submit a domain name or IP address on dnslocator.online, the queried hostname is transmitted from our server to public 1.1.1.1 DNS over HTTPS (DoH) resolvers and to our configured regional public DNS resolvers (including Google Public DNS, AdGuard DNS, Control D, DNS.SB, IIJ Public DNS, TWNIC Quad101, and AliDNS) solely to retrieve public DNS records on your behalf.',
   privacyS2Title: '2. Rate Limiting & Short-Lived Caching',
   privacyS2Body:
     "To protect our infrastructure from automated abuse, our server temporarily processes requester IP addresses in memory using a 60-second sliding-window rate limiter. IP addresses are not persisted to a database or sold to third parties. DNS responses are cached in memory for up to 5 minutes (or the record's TTL, whichever is shorter).",
@@ -208,7 +226,7 @@ const EN_TRANSLATIONS = {
   contactTitle: 'Contact dnslocator.online',
   footerTagline: 'dnslocator.online · Public DNS Propagation & Record Diagnostic Utility',
   footerDisclaimer:
-    'Displays publicly available DNS records queried via Cloudflare 1.1.1.1 DoH and regional resolvers. Not affiliated with ICANN or domain registrars.',
+    'Displays publicly available DNS records queried via public DoH and regional resolvers. Not affiliated with ICANN or domain registrars.',
 } as const;
 
 export type TranslationKey = keyof typeof EN_TRANSLATIONS;
@@ -230,14 +248,16 @@ const TRANSLATIONS: Record<SupportedLang, PartialTranslations> = {
     shareLink: 'Compartir enlace',
     linkCopied: 'Enlace copiado',
     englishBtn: 'English',
-    languageLabel: 'Idioma',
     heroTitle: 'Propagación DNS Global y Consulta de Registros',
+    heroSubtitle: 'Verifica registros DNS en vivo en 18 regiones del mundo en segundos.',
     domainPlaceholder: 'Ingresa un dominio o pega una URL (ej. https://example.com)',
+    recordTypeLabel: 'Tipo de registro DNS',
     lookupBtn: 'Consultar',
     checkingBtn: 'Consultando…',
     hostnameLabel: 'Host:',
     checkApex: 'Consultar dominio raíz',
-    recentLabel: 'Recientes:',
+    recentLabel: 'Búsquedas recientes:',
+    noRecentSearches: 'Aún no hay búsquedas recientes.',
     tabOverview: 'Resumen',
     tabAllRecords: 'Todos los registros',
     tabGlobalRegions: 'Regiones Globales (18)',
@@ -281,14 +301,16 @@ const TRANSLATIONS: Record<SupportedLang, PartialTranslations> = {
     shareLink: 'Partager le lien',
     linkCopied: 'Lien copié',
     englishBtn: 'English',
-    languageLabel: 'Langue',
     heroTitle: 'Propagation DNS Mondiale & Consultation de Zone',
+    heroSubtitle: 'Vérifiez vos enregistrements DNS en direct dans 18 régions en quelques secondes.',
     domainPlaceholder: 'Entrez un domaine ou collez une URL (ex. https://example.com)',
+    recordTypeLabel: 'Type d’enregistrement DNS',
     lookupBtn: 'Vérifier',
     checkingBtn: 'Vérification…',
     hostnameLabel: 'Hôte :',
     checkApex: 'Vérifier le domaine racine',
-    recentLabel: 'Récents :',
+    recentLabel: 'Recherches récentes :',
+    noRecentSearches: 'Aucune recherche récente.',
     tabOverview: 'Aperçu',
     tabAllRecords: 'Tous les enregistrements',
     tabGlobalRegions: 'Régions Mondiales (18)',
@@ -332,14 +354,16 @@ const TRANSLATIONS: Record<SupportedLang, PartialTranslations> = {
     shareLink: 'Link teilen',
     linkCopied: 'Link kopiert',
     englishBtn: 'English',
-    languageLabel: 'Sprache',
     heroTitle: 'Globale DNS-Propagation & Record-Abfrage',
+    heroSubtitle: 'Prüfe Live-DNS-Einträge in 18 weltweiten Regionen in Sekunden.',
     domainPlaceholder: 'Domain eingeben oder URL einfügen (z. B. https://example.com)',
+    recordTypeLabel: 'DNS-Eintragstyp',
     lookupBtn: 'Prüfen',
     checkingBtn: 'Prüfung läuft…',
     hostnameLabel: 'Hostname:',
     checkApex: 'Root-Domain prüfen',
-    recentLabel: 'Zuletzt:',
+    recentLabel: 'Letzte Suchen:',
+    noRecentSearches: 'Noch keine letzten Suchen.',
     tabOverview: 'Übersicht',
     tabAllRecords: 'Alle Einträge',
     tabGlobalRegions: 'Globale Regionen (18)',
@@ -383,19 +407,44 @@ const TRANSLATIONS: Record<SupportedLang, PartialTranslations> = {
     shareLink: 'Compartilhar Link',
     linkCopied: 'Link Copiado',
     englishBtn: 'English',
-    languageLabel: 'Idioma',
     heroTitle: 'Propagação DNS Global e Consulta de Registros',
+    heroSubtitle: 'Verifique registros DNS ao vivo em 18 regiões globais em segundos.',
     domainPlaceholder: 'Digite o domínio ou cole a URL (ex: https://example.com)',
+    recordTypeLabel: 'Tipo de Registro DNS',
     lookupBtn: 'Consultar',
     checkingBtn: 'Verificando…',
+    hostnameLabel: 'Host:',
+    checkApex: 'Consultar domínio raiz',
+    recentLabel: 'Pesquisas recentes:',
+    noRecentSearches: 'Nenhuma pesquisa recente ainda.',
     tabOverview: 'Visão Geral',
     tabAllRecords: 'Todos os Registros',
     tabGlobalRegions: 'Regiões Globais (18)',
+    liveZoneRecords: 'Registros de Zona DNS ao Vivo',
+    recordsFound: 'registros encontrados',
+    openFullZoneTable: 'Abrir tabela completa →',
     statusPropagated: 'Propagado',
     statusNonPropagated: 'Não Propagado',
+    globalResolverDist: 'Distribuição Global de Resolvers',
+    queryingCheckpoints: 'Consultando 18 pontos DNS regionais…',
+    cachedLabel: 'Cache (5m)',
+    liveLabel: 'Ao vivo',
+    expectedPlaceholder: 'Valor esperado (opcional)',
+    colLocation: 'Localização',
+    colResolver: 'Resolver',
+    colResolvedValues: 'Valor(es) resolvidos',
+    colTtl: 'TTL',
+    colLatency: 'Latência',
+    colStatus: 'Status',
+    continentAll: 'Todos',
+    filterRecordsPlaceholder: 'Filtrar registros…',
     backToTool: 'Voltar para a ferramenta DNS',
     aboutTitle: 'Sobre o dnslocator.online',
+    aboutSubtitle: 'Ferramenta independente de propagação DNS global e diagnóstico',
     privacyTitle: 'Política de Privacidade',
+    effectiveDate: 'Data de vigência: novembro de 2026',
+    termsTitle: 'Termos de Serviço',
+    contactTitle: 'Contato dnslocator.online',
   },
   ru: {
     navOverview: 'Обзор',
@@ -411,25 +460,49 @@ const TRANSLATIONS: Record<SupportedLang, PartialTranslations> = {
     shareLink: 'Поделиться ссылкой',
     linkCopied: 'Ссылка скопирована',
     englishBtn: 'English',
-    languageLabel: 'Язык',
     heroTitle: 'Глобальное распространение DNS и поиск записей',
+    heroSubtitle: 'Проверяйте DNS-записи в 18 регионах мира в реальном времени за секунды.',
     domainPlaceholder: 'Введите домен или вставьте URL (напр. https://example.com)',
+    recordTypeLabel: 'Тип DNS-записи',
     lookupBtn: 'Проверить',
     checkingBtn: 'Проверка…',
+    hostnameLabel: 'Хост:',
+    checkApex: 'Проверить корневой домен',
+    recentLabel: 'Недавние поиски:',
+    noRecentSearches: 'Недавних поисков пока нет.',
     tabOverview: 'Обзор',
     tabAllRecords: 'Все записи',
     tabGlobalRegions: 'Регионы мира (18)',
+    liveZoneRecords: 'DNS-записи зоны в реальном времени',
+    recordsFound: 'записей найдено',
+    openFullZoneTable: 'Открыть полную таблицу →',
     statusPropagated: 'Распространено',
     statusNonPropagated: 'Не распространено',
+    globalResolverDist: 'Глобальное распределение резолверов',
+    queryingCheckpoints: 'Опрос 18 региональных DNS-узлов…',
+    cachedLabel: 'Кэш (5 мин)',
+    liveLabel: 'В реальном времени',
+    expectedPlaceholder: 'Ожидаемое значение (необязательно)',
+    colLocation: 'Локация',
+    colResolver: 'Резолвер',
+    colResolvedValues: 'Значение(я)',
+    colTtl: 'TTL',
+    colLatency: 'Задержка',
+    colStatus: 'Статус',
+    continentAll: 'Все',
+    filterRecordsPlaceholder: 'Фильтр записей…',
     backToTool: 'Вернуться к инструменту DNS',
     aboutTitle: 'О dnslocator.online',
+    aboutSubtitle: 'Независимый инструмент проверки глобального распространения DNS',
     privacyTitle: 'Политика конфиденциальности',
+    effectiveDate: 'Дата вступления в силу: ноябрь 2026 г.',
+    termsTitle: 'Условия использования',
+    contactTitle: 'Связаться с dnslocator.online',
   },
 };
 
 interface I18nContextValue {
   lang: SupportedLang;
-  detectedLang: SupportedLang;
   dir: 'ltr' | 'rtl';
   setLang: (lang: SupportedLang) => void;
   switchToEnglish: () => void;
@@ -439,9 +512,10 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [detectedLang] = useState<SupportedLang>(() => detectRegionalLanguage());
   const [lang, setLangState] = useState<SupportedLang>(() => {
     try {
+      const override = window.localStorage.getItem(LANG_ENGLISH_OVERRIDE_KEY);
+      if (override === '1') return 'en';
       const saved = window.localStorage.getItem(LANG_STORAGE_KEY);
       if (saved && SUPPORTED_CODE_SET.has(saved)) {
         return saved as SupportedLang;
@@ -449,8 +523,75 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore storage errors
     }
-    return detectedLang;
+    return 'en';
   });
+
+  // Detect regional language strictly via visitor IP unless user explicitly clicked English
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      if (window.localStorage.getItem(LANG_ENGLISH_OVERRIDE_KEY) === '1') {
+        return;
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
+    const detectViaIp = async () => {
+      let resolvedLang: SupportedLang | null = null;
+
+      try {
+        const res = await fetch('/api/geo-lang', { cache: 'no-store' });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            countryCode?: string | null;
+            lang?: string | null;
+          };
+          if (data.lang && SUPPORTED_CODE_SET.has(data.lang)) {
+            resolvedLang = data.lang as SupportedLang;
+          } else if (data.countryCode) {
+            resolvedLang = mapCountryToSupportedLang(data.countryCode);
+          }
+        }
+      } catch {
+        // Ignore network error and try client IP lookup fallback
+      }
+
+      // If server saw a private/local IP without proxy geo headers, check visitor public IP directly
+      if (resolvedLang === null) {
+        try {
+          const controller = new AbortController();
+          const timer = window.setTimeout(() => controller.abort(), 2000);
+          const geoRes = await fetch('https://get.geojs.io/v1/ip/country.json', {
+            signal: controller.signal,
+          });
+          window.clearTimeout(timer);
+          if (geoRes.ok) {
+            const geo = (await geoRes.json()) as { country?: string };
+            if (geo.country) {
+              resolvedLang = mapCountryToSupportedLang(geo.country);
+            }
+          }
+        } catch {
+          // Ignore client geo timeout
+        }
+      }
+
+      if (!cancelled && resolvedLang && SUPPORTED_CODE_SET.has(resolvedLang)) {
+        setLangState(resolvedLang);
+        try {
+          window.localStorage.setItem(LANG_STORAGE_KEY, resolvedLang);
+        } catch {
+          // Ignore storage error
+        }
+      }
+    };
+
+    detectViaIp();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const dir = useMemo<'ltr' | 'rtl'>(() => {
     return SUPPORTED_LANGUAGES.find((l) => l.code === lang)?.dir ?? 'ltr';
@@ -465,6 +606,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setLangState(nextLang);
     try {
       window.localStorage.setItem(LANG_STORAGE_KEY, nextLang);
+      if (nextLang === 'en') {
+        window.localStorage.setItem(LANG_ENGLISH_OVERRIDE_KEY, '1');
+      } else {
+        window.localStorage.removeItem(LANG_ENGLISH_OVERRIDE_KEY);
+      }
     } catch {
       // Ignore storage failures
     }
@@ -484,13 +630,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const value = useMemo<I18nContextValue>(
     () => ({
       lang,
-      detectedLang,
       dir,
       setLang,
       switchToEnglish,
       t,
     }),
-    [lang, detectedLang, dir, setLang, switchToEnglish, t]
+    [lang, dir, setLang, switchToEnglish, t]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

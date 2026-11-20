@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   Check,
+  Clock,
   Copy,
   Globe,
   Info,
-  Languages,
   Moon,
   RefreshCw,
   Search,
@@ -30,7 +30,7 @@ import {
   type RecentLookupEntry,
 } from './lib/cache';
 import { formatTtl, sanitizeDomainInput } from './lib/domain';
-import { SUPPORTED_LANGUAGES, useI18n, type SupportedLang } from './lib/i18n';
+import { useI18n } from './lib/i18n';
 import {
   ALL_ZONE_RECORD_TYPES,
   PROPAGATION_RECORD_TYPES,
@@ -61,7 +61,7 @@ function getInitialTheme(): ThemeMode {
 
 export default function App() {
   const { isInstalled } = usePWAInstall();
-  const { lang, setLang, switchToEnglish, t } = useI18n();
+  const { lang, switchToEnglish, t } = useI18n();
 
   const [route, setRoute] = useState<AppRoute>(() =>
     getRouteFromPath(window.location.pathname)
@@ -277,7 +277,7 @@ export default function App() {
       setAllRecordsData(json as DnsLookupResponse);
       return true;
     } catch {
-      setAllError('Unable to reach Cloudflare 1.1.1.1 lookup service. Please retry.');
+      setAllError('Unable to reach DNS lookup service. Please retry.');
       return false;
     } finally {
       setIsAllLoading(false);
@@ -559,9 +559,12 @@ export default function App() {
                   >
                     {t('heroTitle')}
                   </h1>
+                  <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mt-1.5">
+                    {t('heroSubtitle')}
+                  </p>
                 </div>
 
-                {/* Regional Language Detector + English Button + Theme Switcher + Cache */}
+                {/* English Revert (only after IP regional translation) + Theme Switcher + Cache */}
                 <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
                   {/* Mobile Rotating About / Privacy Policy Button */}
                   <button
@@ -582,43 +585,16 @@ export default function App() {
                     )}
                   </button>
 
-                  {/* Regional Language Selector */}
-                  <div className="inline-flex items-center h-9 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 gap-1.5 shrink-0">
-                    <Languages className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" aria-hidden="true" />
-                    <label htmlFor="regional-language-select" className="sr-only">
-                      {t('languageLabel')}
-                    </label>
-                    <select
-                      id="regional-language-select"
-                      value={lang}
-                      onChange={(e) => setLang(e.target.value as SupportedLang)}
-                      className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
+                  {/* Show English button only after language has been switched from English via IP */}
+                  {lang !== 'en' && (
+                    <button
+                      type="button"
+                      onClick={switchToEnglish}
+                      className="h-9 px-3 rounded-lg border border-sky-600 dark:border-sky-500 bg-[#0284C7] dark:bg-sky-500 text-white dark:text-slate-950 hover:bg-[#0369A1] dark:hover:bg-sky-400 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                     >
-                      {SUPPORTED_LANGUAGES.map((opt) => (
-                        <option
-                          key={opt.code}
-                          value={opt.code}
-                          className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                        >
-                          {opt.nativeName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Dedicated English Conversion Button */}
-                  <button
-                    type="button"
-                    onClick={switchToEnglish}
-                    aria-pressed={lang === 'en'}
-                    className={`h-9 px-3 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                      lang !== 'en'
-                        ? 'border-sky-600 dark:border-sky-500 bg-[#0284C7] dark:bg-sky-500 text-white dark:text-slate-950 hover:bg-[#0369A1] dark:hover:bg-sky-400'
-                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <span>English</span>
-                  </button>
+                      <span>{t('englishBtn')}</span>
+                    </button>
+                  )}
 
                   {/* Light / Dark Mode Switch */}
                   <button
@@ -710,6 +686,29 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    {/* Record Type Dropdown integrated in Search Bar */}
+                    <label htmlFor="record-type-select" className="sr-only">
+                      {t('recordTypeLabel')}
+                    </label>
+                    <select
+                      id="record-type-select"
+                      aria-label={t('recordTypeLabel')}
+                      value={recordType}
+                      onChange={(e) => handleRecordTypeChange(e.target.value as DnsRecordType)}
+                      dir="ltr"
+                      className="h-11 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950/70 text-sm font-mono font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 cursor-pointer shrink-0"
+                    >
+                      {PROPAGATION_RECORD_TYPES.map((type) => (
+                        <option
+                          key={type}
+                          value={type}
+                          className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                        >
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+
                     <button
                       type="submit"
                       disabled={isLoading}
@@ -738,40 +737,49 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Inline Record-Type Quick Strip */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-0.5">
-                  <div
-                    dir="ltr"
-                    role="group"
-                    aria-label="Propagation DNS record type"
-                    className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-950/80 border border-slate-200/70 dark:border-slate-800 overflow-x-auto"
-                  >
-                    {PROPAGATION_RECORD_TYPES.map((type) => {
-                      const active = recordType === type;
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => handleRecordTypeChange(type)}
-                          aria-pressed={active}
-                          className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                            active
-                              ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-400 shadow-xs'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                          }`}
-                        >
-                          {type}
-                        </button>
-                      );
-                    })}
+                {/* Recent Searches Bar (in place of record strip) & Live Hostname Sanitization */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5 text-xs text-slate-500 dark:text-slate-400 min-h-[28px]">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-300 shrink-0">
+                      <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                      <span>{t('recentLabel')}</span>
+                    </span>
+
+                    {recentLookups.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-1.5" dir="ltr">
+                        {recentLookups.slice(0, 6).map((entry) => (
+                          <button
+                            key={`${entry.domain}-${entry.mode}-${entry.recordType ?? ''}`}
+                            type="button"
+                            onClick={() => {
+                              const nextType =
+                                (entry.recordType as DnsRecordType | undefined) ?? recordType;
+                              setRawInput(entry.domain);
+                              setRecordType(nextType);
+                              executeLookup(entry.domain, { targetType: nextType });
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 hover:border-sky-300 dark:hover:border-sky-700 hover:text-sky-700 dark:hover:text-sky-400 font-mono text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                          >
+                            <span>{entry.domain}</span>
+                            {entry.recordType && (
+                              <span className="text-[10px] font-semibold text-sky-700 dark:text-sky-400">
+                                {entry.recordType}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 dark:text-slate-500">
+                        {t('noRecentSearches')}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Live Sanitization & Recent Lookups */}
                   {((rawInput.trim() && sanitizedPreview.wasModified && sanitizedPreview.isValid) ||
                     (sanitizedPreview.isValid &&
-                      sanitizedPreview.apexDomain !== sanitizedPreview.domain) ||
-                    recentLookups.length > 0) && (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                      sanitizedPreview.apexDomain !== sanitizedPreview.domain)) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
                       {rawInput.trim() &&
                         sanitizedPreview.wasModified &&
                         sanitizedPreview.isValid && (
@@ -793,38 +801,6 @@ export default function App() {
                             {t('checkApex')} ({sanitizedPreview.apexDomain})
                           </button>
                         )}
-
-                      {recentLookups.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span>{t('recentLabel')}</span>
-                          {recentLookups.slice(0, 4).map((entry, idx) => (
-                            <span
-                              key={`${entry.domain}-${entry.mode}-${entry.recordType ?? ''}`}
-                              className="inline-flex items-center gap-2"
-                              dir="ltr"
-                            >
-                              {idx > 0 && (
-                                <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">
-                                  /
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const nextType =
-                                    (entry.recordType as DnsRecordType | undefined) ?? recordType;
-                                  setRawInput(entry.domain);
-                                  setRecordType(nextType);
-                                  executeLookup(entry.domain, { targetType: nextType });
-                                }}
-                                className="font-mono text-slate-700 dark:text-slate-300 hover:text-sky-700 dark:hover:text-sky-400 hover:underline"
-                              >
-                                {entry.domain}
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>

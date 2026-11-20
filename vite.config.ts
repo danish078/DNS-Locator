@@ -26,7 +26,7 @@ export default defineConfig(() => {
           name: 'dnslocator.online',
           short_name: 'dnslocator',
           description:
-            'Global DNS propagation checker across 18 worldwide regions and parallel all-record inspector powered by Cloudflare 1.1.1.1 DoH.',
+            'Global DNS Propagation & Record Lookup — Verify live DNS records across 18 regions in seconds.',
           theme_color: '#0F172A',
           background_color: '#F8FAFC',
           display: 'standalone',

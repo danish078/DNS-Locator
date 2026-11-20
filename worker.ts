@@ -96,7 +96,7 @@ const GLOBAL_CHECKPOINTS: RegionalCheckpointDef[] = [
     continent: 'North America',
     lat: 37.3382,
     lng: -121.8863,
-    provider: 'Cloudflare 1.1.1.1',
+    provider: 'Public 1.1.1.1 Anycast',
     mode: 'cloudflare-json',
     endpoint: 'https://cloudflare-dns.com/dns-query',
   },
@@ -763,6 +763,24 @@ function jsonResponse(
   });
 }
 
+type RegionalLangCode = 'en' | 'es' | 'fr' | 'de' | 'pt' | 'ru';
+
+const COUNTRY_TO_REGIONAL_LANG: Record<string, RegionalLangCode> = {
+  ES: 'es', MX: 'es', AR: 'es', CO: 'es', CL: 'es', PE: 'es', VE: 'es', EC: 'es',
+  GT: 'es', CU: 'es', BO: 'es', DO: 'es', HN: 'es', PY: 'es', SV: 'es', NI: 'es',
+  CR: 'es', PA: 'es', UY: 'es', GQ: 'es',
+  FR: 'fr', BE: 'fr', MC: 'fr', LU: 'fr', SN: 'fr', CI: 'fr', CM: 'fr', CD: 'fr',
+  MG: 'fr', ML: 'fr', BF: 'fr', NE: 'fr', TG: 'fr', BJ: 'fr', GA: 'fr', CG: 'fr', HT: 'fr',
+  DE: 'de', AT: 'de', CH: 'de', LI: 'de',
+  BR: 'pt', PT: 'pt', AO: 'pt', MZ: 'pt', CV: 'pt',
+  RU: 'ru', BY: 'ru',
+};
+
+function mapCountryToLang(countryCode: string | null | undefined): RegionalLangCode {
+  if (!countryCode) return 'en';
+  return COUNTRY_TO_REGIONAL_LANG[countryCode.trim().toUpperCase()] ?? 'en';
+}
+
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
@@ -810,9 +828,45 @@ export default {
       return jsonResponse({
         ok: true,
         service: 'dnslocator.online',
-        runtime: 'cloudflare-workers',
+        runtime: 'edge-worker',
         regions: GLOBAL_CHECKPOINTS.length,
       });
+    }
+
+    if (url.pathname === '/api/geo-lang' && request.method === 'GET') {
+      const cfCountry = (request as Request & { cf?: { country?: string } }).cf?.country;
+      const headerCountry = (
+        cfCountry ||
+        request.headers.get('CF-IPCountry') ||
+        request.headers.get('X-Country-Code') ||
+        ''
+      )
+        .trim()
+        .toUpperCase();
+
+      if (
+        headerCountry &&
+        /^[A-Z]{2}$/.test(headerCountry) &&
+        headerCountry !== 'XX' &&
+        headerCountry !== 'ZZ' &&
+        headerCountry !== 'T1'
+      ) {
+        return jsonResponse(
+          {
+            countryCode: headerCountry,
+            lang: mapCountryToLang(headerCountry),
+            source: 'edge-ip',
+          },
+          200,
+          { 'Cache-Control': 'no-store' }
+        );
+      }
+
+      return jsonResponse(
+        { countryCode: null, lang: null, source: 'unavailable' },
+        200,
+        { 'Cache-Control': 'no-store' }
+      );
     }
 
     if (url.pathname === '/api/dns' && request.method === 'GET') {
@@ -911,7 +965,7 @@ export default {
         queriedAt: new Date().toISOString(),
         cached: false,
         queryTimeMs: Math.max(1, Date.now() - started),
-        resolver: 'Cloudflare 1.1.1.1 DoH',
+        resolver: 'Public 1.1.1.1 DoH',
         dnssecValidated,
         records,
         recordsByType,

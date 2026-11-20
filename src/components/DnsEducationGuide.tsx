@@ -50,7 +50,7 @@ const DNS_RECORD_GUIDE: RecordGuideItem[] = [
     type: 'NS',
     name: 'Name Server Delegation',
     purpose: 'Identifies the authoritative DNS providers responsible for answering queries about the domain zone.',
-    example: 'example.com. 86400 IN NS ns1.cloudflare.com.',
+    example: 'example.com. 86400 IN NS ns1.example-dns.net.',
     notes: 'NS updates typically carry 24–48 hour TTLs at the parent registry (.com, .org, .online).',
   },
   {
@@ -94,8 +94,8 @@ const FAQ_ITEMS = [
     a: 'Inbound mail relies on MX records, while outbound deliverability depends on matching TXT records for SPF (v=spf1), DKIM selector keys, and a _dmarc policy. Use the All Records view above to confirm MX, SPF, and _dmarc are all present and properly formatted.',
   },
   {
-    q: 'Is dnslocator.online affiliated with ICANN, Cloudflare, or any domain registrar?',
-    a: 'No. dnslocator.online is an independent public diagnostic utility. It queries publicly available DNS records via Cloudflare 1.1.1.1 DNS over HTTPS and regional public resolvers and is not affiliated with ICANN, IANA, or domain registrars.',
+    q: 'Is dnslocator.online affiliated with ICANN or any domain registrar?',
+    a: 'No. dnslocator.online is an independent public diagnostic utility. It queries publicly available DNS records via public DNS over HTTPS and regional resolvers and is not affiliated with ICANN, IANA, or domain registrars.',
   },
 ];
 
@@ -167,7 +167,7 @@ export default function DnsEducationGuide() {
           </h3>
           <div className="text-sm text-slate-600 dark:text-slate-300 space-y-3 leading-relaxed">
             <p>
-              When a browser or mail server requests <span className="font-mono text-slate-800 dark:text-slate-200">example.com</span>, it asks a recursive resolver (such as Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9, or an ISP resolver). If the answer is absent from cache, the resolver walks the hierarchy from the root servers to the TLD registry and finally to your authoritative nameservers.
+              When a browser or mail server requests <span className="font-mono text-slate-800 dark:text-slate-200">example.com</span>, it asks a recursive resolver (such as 1.1.1.1, Google 8.8.8.8, Quad9 9.9.9.9, or an ISP resolver). If the answer is absent from cache, the resolver walks the hierarchy from the root servers to the TLD registry and finally to your authoritative nameservers.
             </p>
             <p>
               Every returned record carries a <strong className="font-semibold text-slate-900 dark:text-slate-100">TTL (Time to Live)</strong> in seconds. A TTL of <span className="font-mono text-slate-800 dark:text-slate-200">3600</span> tells resolvers worldwide to reuse the cached response for one full hour before checking your authoritative server again. Lowering TTL to <span className="font-mono text-slate-800 dark:text-slate-200">300</span> prior to a migration dramatically shortens cutover lag.
