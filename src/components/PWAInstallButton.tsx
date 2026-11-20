@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Monitor, Smartphone, X } from 'lucide-react';
+import { AlertCircle, Download, Monitor, Smartphone, X } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface PWAInstallButtonProps {
@@ -7,14 +7,15 @@ interface PWAInstallButtonProps {
 }
 
 export default function PWAInstallButton({ variant = 'header' }: PWAInstallButtonProps) {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+  const { isInstallable, isInstalled, wasInstalledBefore, isIOS, install } = usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
+  const [showReinstallConfirm, setShowReinstallConfirm] = useState(false);
 
   if (isInstalled) {
     return null;
   }
 
-  const handleClick = async () => {
+  const startInstall = async () => {
     if (isInstallable) {
       const accepted = await install();
       if (!accepted) {
@@ -23,6 +24,20 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
       return;
     }
     setShowGuide(true);
+  };
+
+  const handleClick = () => {
+    // Already installed from this browser before: ask before installing a second time.
+    if (wasInstalledBefore) {
+      setShowReinstallConfirm(true);
+      return;
+    }
+    void startInstall();
+  };
+
+  const confirmReinstall = () => {
+    setShowReinstallConfirm(false);
+    void startInstall();
   };
 
   const buttonClasses =
@@ -40,6 +55,52 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
         <Download className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
         <span>Install App</span>
       </button>
+
+      {showReinstallConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px] p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="pwa-reinstall-title"
+          aria-describedby="pwa-reinstall-desc"
+        >
+          <div className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-4 h-4" aria-hidden="true" />
+              </div>
+              <div className="space-y-1">
+                <h2
+                  id="pwa-reinstall-title"
+                  className="text-base font-bold text-slate-900 dark:text-slate-100"
+                >
+                  App already installed
+                </h2>
+                <p id="pwa-reinstall-desc" className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                  You have already installed DNS Locator on this device. Do you want to install it again?
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setShowReinstallConfirm(false)}
+                className="h-10 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+              >
+                No, cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmReinstall}
+                className="h-10 px-4 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-sm font-semibold transition-colors cursor-pointer"
+              >
+                Yes, install again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showGuide && (
         <div

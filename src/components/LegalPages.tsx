@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
-  Bell,
   CheckCircle2,
   Cookie,
   FileText,
@@ -11,12 +10,6 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
-import {
-  clearCookieConsent,
-  getSavedCookieConsent,
-  saveCookieConsent,
-  type CookieConsentChoice,
-} from './CookieNoticeBanner';
 
 export type LegalPageRoute =
   | 'about'
@@ -24,14 +17,14 @@ export type LegalPageRoute =
   | 'privacy'
   | 'terms'
   | 'disclaimer'
-  | 'cookies-policy'
-  | 'cookies-notice';
+  | 'cookies-policy';
 
 interface LegalPagesProps {
   page: LegalPageRoute;
   onNavigateHome: () => void;
   onNavigatePage: (page: LegalPageRoute) => void;
-  onConsentChanged?: () => void;
+  /** Opens the cookie pop-up so visitors can change or withdraw consent. */
+  onOpenCookieSettings?: () => void;
 }
 
 const LEGAL_TABS: { id: LegalPageRoute; label: string }[] = [
@@ -41,14 +34,13 @@ const LEGAL_TABS: { id: LegalPageRoute; label: string }[] = [
   { id: 'terms', label: 'Terms and Conditions' },
   { id: 'disclaimer', label: 'Disclaimer' },
   { id: 'cookies-policy', label: 'Cookies Policy' },
-  { id: 'cookies-notice', label: 'Cookies Notice' },
 ];
 
 export default function LegalPages({
   page,
   onNavigateHome,
   onNavigatePage,
-  onConsentChanged,
+  onOpenCookieSettings,
 }: LegalPagesProps) {
   const { t } = useI18n();
   const [name, setName] = useState('');
@@ -61,10 +53,6 @@ export default function LegalPages({
     referenceId: string;
     receivedAt: string;
   } | null>(null);
-
-  const [consentChoice, setConsentChoice] = useState<CookieConsentChoice>(
-    () => getSavedCookieConsent().choice
-  );
 
   const handleContactSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -90,18 +78,6 @@ export default function LegalPages({
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleUpdateConsent = (choice: Exclude<CookieConsentChoice, null>) => {
-    saveCookieConsent(choice);
-    setConsentChoice(choice);
-    onConsentChanged?.();
-  };
-
-  const handleResetConsent = () => {
-    clearCookieConsent();
-    setConsentChoice(null);
-    onConsentChanged?.();
   };
 
   return (
@@ -200,7 +176,7 @@ export default function LegalPages({
                     <strong className="text-slate-900 dark:text-slate-100">Legitimate Interests (GDPR Art. 6(1)(f)):</strong> Executing the public DNS lookup you explicitly request, resolving your regional language via IP country code, and enforcing a temporary 60-second in-memory rate limit to prevent automated abuse and DDoS attacks.
                   </li>
                   <li>
-                    <strong className="text-slate-900 dark:text-slate-100">Consent (GDPR Art. 6(1)(a)):</strong> Storing optional preference settings or any future non-essential analytics/advertising identifiers, managed transparently through our Cookies Notice and withdrawable at any time.
+                    <strong className="text-slate-900 dark:text-slate-100">Consent (GDPR Art. 6(1)(a)):</strong> Storing optional preference settings or any future non-essential analytics/advertising identifiers, managed transparently through our cookie pop-up and withdrawable at any time via Cookie Settings.
                   </li>
                   <li>
                     <strong className="text-slate-900 dark:text-slate-100">Data Minimization &amp; No User Profiling:</strong> We do not require account registration, we do not build behavioral profiles, and we never sell personal data or query histories to third parties.
@@ -460,107 +436,17 @@ export default function LegalPages({
                   4. Managing or Disabling Cookies
                 </h2>
                 <p>
-                  You can clear DNS Locator&apos;s local cache at any time via the <strong>Clear Cache</strong> button, update your preference on our{' '}
+                  You can clear DNS Locator&apos;s local cache at any time via the <strong>Clear Cache</strong> button, change or withdraw your choice in{' '}
                   <button
                     type="button"
-                    onClick={() => onNavigatePage('cookies-notice')}
+                    onClick={() => onOpenCookieSettings?.()}
                     className="text-sky-700 dark:text-sky-400 underline cursor-pointer"
                   >
-                    Cookies Notice
+                    Cookie Settings
                   </button>{' '}
-                  page, or configure your browser to block or delete cookies.
+                  (also linked in the footer), or configure your browser to block or delete cookies.
                 </p>
               </section>
-            </div>
-          </>
-        )}
-
-        {page === 'cookies-notice' && (
-          <>
-            <div>
-              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400 mb-2">
-                <Bell className="w-4 h-4" aria-hidden="true" />
-                <span>GDPR Consent &amp; Transparency</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-                Cookies Notice
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {t('effectiveDate')}
-              </p>
-            </div>
-
-            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              <p>
-                Under EU ePrivacy rules and the General Data Protection Regulation (GDPR), DNS Locator informs all visitors before storing or accessing non-essential data on your device. Strictly necessary browser storage required to perform your DNS lookup, enforce fair-use security, and remember your language/theme selection operates under legitimate functional necessity.
-              </p>
-
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      Your Current Cookie &amp; Storage Preference
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      You may update or withdraw your consent at any time (GDPR Art. 7(3)).
-                    </p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
-                    Status:{' '}
-                    {consentChoice === 'all'
-                      ? 'Accepted All'
-                      : consentChoice === 'essential'
-                        ? 'Essential Only'
-                        : 'Not Yet Set'}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateConsent('essential')}
-                    className="h-9 px-3.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    Save Essential Only
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateConsent('all')}
-                    className="h-9 px-4 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    Accept All
-                  </button>
-                  {consentChoice !== null && (
-                    <button
-                      type="button"
-                      onClick={handleResetConsent}
-                      className="h-9 px-3 rounded-lg text-xs font-medium text-rose-700 dark:text-rose-400 hover:underline cursor-pointer"
-                    >
-                      Withdraw Consent &amp; Re-open Banner
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                For full technical tables and legal details, please review our{' '}
-                <button
-                  type="button"
-                  onClick={() => onNavigatePage('cookies-policy')}
-                  className="text-sky-700 dark:text-sky-400 underline cursor-pointer"
-                >
-                  Cookies Policy
-                </button>{' '}
-                and{' '}
-                <button
-                  type="button"
-                  onClick={() => onNavigatePage('privacy')}
-                  className="text-sky-700 dark:text-sky-400 underline cursor-pointer"
-                >
-                  Privacy Policy
-                </button>
-                .
-              </p>
             </div>
           </>
         )}
