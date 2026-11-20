@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>dnslocator.online – Global DNS Propagation & Record Lookup</title>
+    <meta
+      name="description"
+      content="Check global DNS propagation across 18 regions and query A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records via Cloudflare 1.1.1.1 DoH in real time."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="dnslocator.online" />
+    <meta property="og:title" content="dnslocator.online – Global DNS Propagation & Record Lookup" />
+    <meta
+      property="og:description"
+      content="Check global DNS propagation across 18 regions and query A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records via Cloudflare 1.1.1.1 DoH in real time."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="dnslocator.online – Global DNS Propagation & Record Lookup" />
+    <meta
+      name="twitter:description"
+      content="Check global DNS propagation across 18 regions and query A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records via Cloudflare 1.1.1.1 DoH in real time."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..600;1,9..40,400..500&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "dnslocator.online",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "All",
+        "description": "Free online global DNS propagation checker and public DNS record lookup utility powered by Cloudflare 1.1.1.1 DNS over HTTPS and regional public resolvers.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Global DNS propagation checks across 18 worldwide locations",
+          "Parallel A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA record lookups",
+          "Email SPF and DMARC quick diagnostics",
+          "Cloudflare 1.1.1.1 DNS over HTTPS JSON API integration"
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How long does global DNS propagation take?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Most DNS updates appear across major public resolvers within a few minutes to 4 hours, though full global propagation can take up to 24–48 hours depending on the previous record's Time to Live (TTL) and ISP resolver caching."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why do different regions return different IP addresses for the same domain?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Global websites and CDNs use GeoDNS or Anycast routing to direct visitors to the nearest regional edge server, or they may still be serving cached DNS entries while a recent DNS change propagates."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is dnslocator.online affiliated with ICANN or any domain registrar?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. dnslocator.online is an independent public DNS diagnostic utility displaying publicly available DNS records queried through Cloudflare's 1.1.1.1 resolver and regional public DNS servers."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="bg-[#F8FAFC] text-[#0F172A] antialiased selection:bg-sky-100 selection:text-sky-950">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
