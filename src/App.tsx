@@ -455,7 +455,9 @@ export default function App() {
               height={32}
               className="w-7 h-7 sm:w-8 sm:h-8 shrink-0"
             />
-            <span>DNS Locator</span>
+            <span>
+              <span className="text-emerald-700 dark:text-emerald-300">DNS</span> Locator
+            </span>
           </a>
 
           {/* Zone 2: Concise navigation links (legal pages moved to footer) */}
