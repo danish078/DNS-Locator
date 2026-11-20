@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useI18n } from '../lib/i18n';
 import type { RegionalCheckpointResult } from '../types/dns';
 
 interface WorldPropagationMapProps {
@@ -18,22 +19,18 @@ function projectPoint(lat: number, lng: number): { x: number; y: number } {
   return { x, y };
 }
 
-function getMarkerColors(
+function isRegionPropagated(
   region: RegionalCheckpointResult,
   expectedValue?: string
-): { fill: string; ring: string; label: string } {
-  if (region.status === 'resolved') {
-    const expectedTrimmed = expectedValue?.trim().toLowerCase();
-    const isMatch = expectedTrimmed
-      ? region.answers.some((a) => a.value.toLowerCase().includes(expectedTrimmed))
-      : region.matchesConsensus;
-
-    if (isMatch) {
-      return { fill: '#16A34A', ring: '#DCFCE7', label: 'Propagated' };
-    }
-    return { fill: '#D97706', ring: '#FEF3C7', label: 'Different Value' };
+): boolean {
+  if (region.status !== 'resolved' || region.answers.length === 0) {
+    return false;
   }
-  return { fill: '#DC2626', ring: '#FEE2E2', label: region.statusLabel };
+  const expectedTrimmed = expectedValue?.trim().toLowerCase();
+  if (expectedTrimmed) {
+    return region.answers.some((a) => a.value.toLowerCase().includes(expectedTrimmed));
+  }
+  return true;
 }
 
 export default function WorldPropagationMap({
@@ -43,15 +40,21 @@ export default function WorldPropagationMap({
   onSelectRegion,
   isLoading,
 }: WorldPropagationMapProps) {
+  const { t } = useI18n();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const projected = useMemo(() => {
-    return regions.map((r) => ({
-      region: r,
-      ...projectPoint(r.lat, r.lng),
-      colors: getMarkerColors(r, expectedValue),
-    }));
-  }, [regions, expectedValue]);
+    return regions.map((r) => {
+      const propagated = isRegionPropagated(r, expectedValue);
+      return {
+        region: r,
+        ...projectPoint(r.lat, r.lng),
+        colors: propagated
+          ? { fill: '#16A34A', ring: '#DCFCE7', label: t('statusPropagated') }
+          : { fill: '#DC2626', ring: '#FEE2E2', label: t('statusNonPropagated') },
+      };
+    });
+  }, [regions, expectedValue, t]);
 
   const activePin = useMemo(() => {
     const targetId = hoveredId ?? selectedRegionId;
@@ -60,23 +63,22 @@ export default function WorldPropagationMap({
   }, [hoveredId, selectedRegionId, projected]);
 
   return (
-    <div className="relative w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden">
+    <div
+      dir="ltr"
+      className="relative w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden"
+    >
       <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-          Global Resolver Distribution
+          {t('globalResolverDist')}
         </span>
         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A]" aria-hidden="true" />
-            <span>Matched Consensus</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" aria-hidden="true" />
-            <span>Regional Variance</span>
+            <span>{t('statusPropagated')}</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626]" aria-hidden="true" />
-            <span>Unresolved / Timeout</span>
+            <span>{t('statusNonPropagated')}</span>
           </span>
         </div>
       </div>
@@ -149,7 +151,7 @@ export default function WorldPropagationMap({
                   }
                   role="button"
                   tabIndex={0}
-                  aria-label={`${region.city}, ${region.country}: ${region.statusLabel}`}
+                  aria-label={`${region.city}, ${region.country}: ${colors.label}`}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
@@ -176,7 +178,7 @@ export default function WorldPropagationMap({
         {isLoading && (
           <div className="absolute inset-0 bg-slate-50/70 dark:bg-slate-950/70 backdrop-blur-[1px] flex items-center justify-center">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-md shadow-xs">
-              Querying 18 regional DNS checkpoints…
+              {t('queryingCheckpoints')}
             </span>
           </div>
         )}
@@ -196,7 +198,7 @@ export default function WorldPropagationMap({
               {activePin.region.provider}
             </div>
             <div className="mt-1.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 truncate">
-              {activePin.region.primaryValue ?? activePin.region.statusLabel}
+              {activePin.region.primaryValue ?? activePin.colors.label}
             </div>
             <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
               <span style={{ color: activePin.colors.fill }} className="font-medium">

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  AlertTriangle,
   Check,
   CheckCircle2,
   Copy,
@@ -9,6 +8,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { formatTtl } from '../lib/domain';
+import { useI18n } from '../lib/i18n';
 import type {
   ContinentKey,
   PropagationResponse,
@@ -34,32 +34,38 @@ const CONTINENTS: ContinentKey[] = [
   'Middle East & Africa',
 ];
 
+function isRegionPropagated(
+  region: RegionalCheckpointResult,
+  expectedValue: string
+): boolean {
+  if (region.status !== 'resolved' || region.answers.length === 0) {
+    return false;
+  }
+  const trimmed = expectedValue.trim().toLowerCase();
+  if (trimmed) {
+    return region.answers.some((a) => a.value.toLowerCase().includes(trimmed));
+  }
+  return true;
+}
+
 function StatusBadge({
   region,
   expectedValue,
+  propagatedLabel,
+  nonPropagatedLabel,
 }: {
   region: RegionalCheckpointResult;
   expectedValue: string;
+  propagatedLabel: string;
+  nonPropagatedLabel: string;
 }) {
-  if (region.status === 'resolved') {
-    const trimmed = expectedValue.trim().toLowerCase();
-    const matches = trimmed
-      ? region.answers.some((a) => a.value.toLowerCase().includes(trimmed))
-      : region.matchesConsensus;
+  const propagated = isRegionPropagated(region, expectedValue);
 
-    if (matches) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>{trimmed ? 'Expected Match' : 'Propagated'}</span>
-        </span>
-      );
-    }
-
+  if (propagated) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 whitespace-nowrap">
-        <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-        <span>{trimmed ? 'Mismatch' : 'Geo Variance'}</span>
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>{propagatedLabel}</span>
       </span>
     );
   }
@@ -67,7 +73,7 @@ function StatusBadge({
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-700 dark:text-rose-400 whitespace-nowrap">
       <XCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-      <span>{region.statusLabel}</span>
+      <span>{nonPropagatedLabel}</span>
     </span>
   );
 }
@@ -79,6 +85,7 @@ export default function PropagationResults({
   expectedValue,
   onExpectedValueChange,
 }: PropagationResultsProps) {
+  const { t } = useI18n();
   const [continent, setContinent] = useState<ContinentKey>('All');
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -89,17 +96,9 @@ export default function PropagationResults({
     return data.regions.filter((r) => r.continent === continent);
   }, [data, continent]);
 
-  const expectedMatchedCount = useMemo(() => {
+  const propagatedCount = useMemo(() => {
     if (!data) return 0;
-    const trimmed = expectedValue.trim().toLowerCase();
-    if (!trimmed) {
-      return data.regions.filter((r) => r.status === 'resolved' && r.matchesConsensus).length;
-    }
-    return data.regions.filter(
-      (r) =>
-        r.status === 'resolved' &&
-        r.answers.some((a) => a.value.toLowerCase().includes(trimmed))
-    ).length;
+    return data.regions.filter((r) => isRegionPropagated(r, expectedValue)).length;
   }, [data, expectedValue]);
 
   const handleCopy = async (id: string, text: string) => {
@@ -114,7 +113,16 @@ export default function PropagationResults({
 
   const handleExportJson = () => {
     if (!data) return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const normalized = {
+      ...data,
+      regions: data.regions.map((r) => ({
+        ...r,
+        statusLabel: isRegionPropagated(r, expectedValue)
+          ? 'Propagated'
+          : 'Non-Propagated',
+      })),
+    };
+    const blob = new Blob([JSON.stringify(normalized, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -131,7 +139,7 @@ export default function PropagationResults({
       r.country,
       r.continent,
       r.provider,
-      r.statusLabel,
+      isRegionPropagated(r, expectedValue) ? 'Propagated' : 'Non-Propagated',
       r.answers.map((a) => (a.priority !== undefined ? `${a.priority} ${a.value}` : a.value)).join('; '),
       r.answers[0]?.ttl ?? '',
       String(r.latencyMs),
@@ -164,10 +172,10 @@ export default function PropagationResults({
         <div className="flex-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-col justify-between gap-6">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Global DNS Propagation Map &amp; Regional Resolvers
+              {t('emptyMapTitle')}
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              Enter a domain above to inspect every DNS record type and verify how 18 worldwide checkpoints resolve your domain in real time.
+              {t('emptyMapDesc')}
             </p>
           </div>
 
@@ -182,27 +190,27 @@ export default function PropagationResults({
             <div className="flex items-start gap-2.5">
               <Globe className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" aria-hidden="true" />
               <div>
-                <p className="font-medium text-slate-900 dark:text-slate-100">18 Worldwide Checkpoints</p>
+                <p className="font-medium text-slate-900 dark:text-slate-100">{t('featCheckpointsTitle')}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Queries Cloudflare 1.1.1.1, AdGuard, Control D, AliDNS, IIJ Tokyo, TWNIC, DNS.SB, and regional Google ECS nodes.
+                  {t('featCheckpointsDesc')}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-2.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" aria-hidden="true" />
               <div>
-                <p className="font-medium text-slate-900 dark:text-slate-100">Expected Value Matching</p>
+                <p className="font-medium text-slate-900 dark:text-slate-100">{t('featExpectedTitle')}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Compare every region against the consensus IP or paste your target IP to track rollout completion.
+                  {t('featExpectedDesc')}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-2.5">
               <Download className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" aria-hidden="true" />
               <div>
-                <p className="font-medium text-slate-900 dark:text-slate-100">Offline-Ready Cache &amp; Export</p>
+                <p className="font-medium text-slate-900 dark:text-slate-100">{t('featCacheTitle')}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  5-minute client and server TTL caching prevents redundant lookups, with one-click JSON, CSV, and BIND exports.
+                  {t('featCacheDesc')}
                 </p>
               </div>
             </div>
@@ -252,38 +260,29 @@ export default function PropagationResults({
               </span>
               <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
               <span className="font-medium text-sky-700 dark:text-sky-400">
-                {data.recordType} Propagation
+                {data.recordType} {t('propagationSuffix')}
               </span>
               <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
               <span className="text-slate-600 dark:text-slate-300 tabular-nums">
-                {expectedMatchedCount}/{data.totalRegions}{' '}
-                {expectedValue.trim() ? 'matched expected' : 'consensus'}
+                {propagatedCount}/{data.totalRegions} {t('statusPropagated')}
               </span>
               <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
               <span className="text-slate-500 dark:text-slate-400 tabular-nums">
-                {data.cached ? 'Cached (5m)' : `Live ${data.queryTimeMs} ms`}
+                {data.cached ? t('cachedLabel') : `${t('liveLabel')} ${data.queryTimeMs} ms`}
               </span>
-              {data.hasGeoVariance && (
-                <>
-                  <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
-                  <span className="text-amber-700 dark:text-amber-400 font-medium">
-                    GeoDNS / CDN regional variance
-                  </span>
-                </>
-              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <label htmlFor="expected-value-input" className="sr-only">
-                Expected DNS record value
+                {t('expectedPlaceholder')}
               </label>
               <input
                 id="expected-value-input"
                 type="text"
                 value={expectedValue}
                 onChange={(e) => onExpectedValueChange(e.target.value)}
-                placeholder="Match expected value (optional)"
-                className="h-8 px-2.5 text-xs font-mono rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white dark:focus:bg-slate-900 w-56"
+                placeholder={t('expectedPlaceholder')}
+                className="h-8 px-2.5 text-xs font-mono rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white dark:focus:bg-slate-900 w-56"
               />
               <button
                 type="button"
@@ -333,7 +332,7 @@ export default function PropagationResults({
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  {item} ({count})
+                  {item === 'All' ? t('continentAll') : item} ({count})
                 </button>
               );
             })}
@@ -345,12 +344,12 @@ export default function PropagationResults({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <th className="py-2.5 px-4 whitespace-nowrap">Location</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap">Resolver</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap">Resolved Value(s)</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap text-right">TTL</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap text-right">Latency</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap text-right">Status</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap">{t('colLocation')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap">{t('colResolver')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap">{t('colResolvedValues')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap text-right">{t('colTtl')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap text-right">{t('colLatency')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap text-right">{t('colStatus')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-sm">
@@ -392,7 +391,7 @@ export default function PropagationResults({
                             {region.transport}
                           </div>
                         </td>
-                        <td className="py-2.5 px-4 max-w-[340px]">
+                        <td className="py-2.5 px-4 max-w-[340px]" dir="ltr">
                           {region.answers.length > 0 ? (
                             <div className="flex items-start justify-between gap-2">
                               <div className="font-mono text-xs text-slate-900 dark:text-slate-100 space-y-0.5 break-all">
@@ -408,7 +407,7 @@ export default function PropagationResults({
                                 ))}
                                 {region.answers.length > 3 && (
                                   <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                                    +{region.answers.length - 3} more records
+                                    +{region.answers.length - 3} {t('moreRecords')}
                                   </div>
                                 )}
                               </div>
@@ -439,7 +438,12 @@ export default function PropagationResults({
                           {region.latencyMs} ms
                         </td>
                         <td className="py-2.5 px-4 text-right">
-                          <StatusBadge region={region} expectedValue={expectedValue} />
+                          <StatusBadge
+                            region={region}
+                            expectedValue={expectedValue}
+                            propagatedLabel={t('statusPropagated')}
+                            nonPropagatedLabel={t('statusNonPropagated')}
+                          />
                         </td>
                       </tr>
                     );

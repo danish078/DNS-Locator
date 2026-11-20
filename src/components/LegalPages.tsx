@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowLeft, CheckCircle2, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Info, Mail, ShieldCheck } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 export type LegalPageRoute = 'about' | 'privacy' | 'terms' | 'contact';
 
@@ -14,6 +15,7 @@ export default function LegalPages({
   onNavigateHome,
   onNavigatePage,
 }: LegalPagesProps) {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('General Question');
@@ -53,36 +55,65 @@ export default function LegalPages({
 
   return (
     <div className="max-w-3xl mx-auto py-8">
-      <button
-        type="button"
-        onClick={onNavigateHome}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 mb-6"
-      >
-        <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-        <span>Back to DNS Lookup Tool</span>
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <button
+          type="button"
+          onClick={onNavigateHome}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300"
+        >
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+          <span>{t('backToTool')}</span>
+        </button>
+
+        <div className="flex items-center gap-2 text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => onNavigatePage('about')}
+            className={`px-3 py-1.5 rounded-lg border transition-colors ${
+              page === 'about'
+                ? 'border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 font-semibold'
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            {t('navAbout')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigatePage('privacy')}
+            className={`px-3 py-1.5 rounded-lg border transition-colors ${
+              page === 'privacy'
+                ? 'border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 font-semibold'
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            {t('navPrivacy')}
+          </button>
+        </div>
+      </div>
 
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 space-y-6">
         {page === 'about' && (
           <>
             <div>
+              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400 mb-2">
+                <Info className="w-4 h-4" aria-hidden="true" />
+                <span>{t('navAbout')}</span>
+              </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-                About dnslocator.online
+                {t('aboutTitle')}
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Independent Global DNS Propagation &amp; Record Diagnostic Tool
+                {t('aboutSubtitle')}
               </p>
             </div>
             <div className="space-y-4 text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-              <p>
-                <strong className="text-slate-900 dark:text-slate-100">dnslocator.online</strong> is a free, lightweight Node.js web utility built for developers, system administrators, and website owners who need fast visibility into public DNS records and worldwide DNS propagation.
-              </p>
-              <p>
-                In Global Propagation mode, our Node.js backend dispatches simultaneous queries across 18 geographically distributed DNS checkpoints—spanning North America, South America, Europe, Asia-Pacific, Oceania, and Africa—using public DNS over HTTPS (DoH) resolvers and regional EDNS Client Subnet (ECS) routing. In All Records mode, dnslocator.online queries <span className="font-mono text-slate-800 dark:text-slate-200">A, AAAA, CNAME, MX, TXT, NS, SOA, CAA</span>, and <span className="font-mono text-slate-800 dark:text-slate-200">_dmarc</span> records in parallel via Cloudflare&apos;s public 1.1.1.1 DoH JSON resolver.
-              </p>
+              <p>{t('aboutP1')}</p>
+              <p>{t('aboutP2')}</p>
               <div className="rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 p-4 text-sm text-slate-700 dark:text-slate-300">
-                <strong className="text-slate-900 dark:text-slate-100 block mb-1">Non-Affiliation Notice</strong>
-                dnslocator.online displays publicly available DNS zone records only. We are not affiliated with, endorsed by, or connected to ICANN, IANA, Cloudflare, Google, or any domain name registrar.
+                <strong className="text-slate-900 dark:text-slate-100 block mb-1">
+                  {t('nonAffiliationTitle')}
+                </strong>
+                {t('nonAffiliationBody')}
               </div>
             </div>
           </>
@@ -93,60 +124,51 @@ export default function LegalPages({
             <div>
               <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400 mb-2">
                 <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-                <span>Privacy Policy</span>
+                <span>{t('navPrivacy')}</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-                Privacy Policy
+                {t('privacyTitle')}
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Effective Date: November 2026</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {t('effectiveDate')}
+              </p>
             </div>
 
             <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
               <section className="space-y-2">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  1. DNS Query Transmission &amp; Third-Party Resolvers
+                  {t('privacyS1Title')}
                 </h2>
-                <p>
-                  When you submit a domain name or IP address on dnslocator.online, the queried hostname is transmitted from our Node.js server to{' '}
-                  <strong className="text-slate-900 dark:text-slate-100">
-                    Cloudflare&apos;s public 1.1.1.1 DNS over HTTPS (DoH) resolver
-                  </strong>{' '}
-                  (<span className="font-mono">cloudflare-dns.com</span>) and, when using Global Propagation mode, to our configured regional public DNS resolvers (including Google Public DNS, AdGuard DNS, Control D, DNS.SB, IIJ Public DNS, TWNIC Quad101, and AliDNS) solely to retrieve public DNS records on your behalf.
-                </p>
+                <p>{t('privacyS1Body')}</p>
               </section>
 
               <section className="space-y-2">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  2. Rate Limiting &amp; Short-Lived Caching
+                  {t('privacyS2Title')}
                 </h2>
-                <p>
-                  To protect our infrastructure from automated abuse, our server temporarily processes requester IP addresses in memory using a 60-second sliding-window rate limiter. IP addresses are not persisted to a database or sold to third parties. DNS responses are cached in memory for up to 5 minutes (or the record&apos;s TTL, whichever is shorter).
-                </p>
+                <p>{t('privacyS2Body')}</p>
               </section>
 
               <section className="space-y-2">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  3. Browser Local Storage
+                  {t('privacyS3Title')}
                 </h2>
-                <p>
-                  Your browser stores recent DNS lookup responses, theme preferences, and recent query history locally in <span className="font-mono">localStorage</span> for 5 minutes to avoid redundant network requests. You may clear the DNS cache at any time using the Clear Cache button.
-                </p>
+                <p>{t('privacyS3Body')}</p>
               </section>
 
               <section className="space-y-2">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  4. Contact Information &amp; Inquiries
+                  {t('privacyS4Title')}
                 </h2>
                 <p>
-                  If you submit a message via our{' '}
+                  {t('privacyS4Body')}{' '}
                   <button
                     type="button"
                     onClick={() => onNavigatePage('contact')}
                     className="text-sky-700 dark:text-sky-400 underline hover:text-sky-900 dark:hover:text-sky-300"
                   >
-                    Contact page
+                    {t('navContact')}
                   </button>
-                  , your name, email address, and message are used strictly to respond to your request.
                 </p>
               </section>
             </div>
@@ -157,9 +179,11 @@ export default function LegalPages({
           <>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-                Terms of Service
+                {t('termsTitle')}
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Effective Date: November 2026</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {t('effectiveDate')}
+              </p>
             </div>
 
             <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
@@ -201,7 +225,7 @@ export default function LegalPages({
                 <span>Contact Support</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-                Contact dnslocator.online
+                {t('contactTitle')}
               </h1>
               <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                 Report a resolver issue, request a regional checkpoint, or ask a question about DNS diagnostics.

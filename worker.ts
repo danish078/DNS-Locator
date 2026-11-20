@@ -621,7 +621,7 @@ async function queryCheckpoint(
 ) {
   const started = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3800);
+  const timer = setTimeout(() => controller.abort(), 5500);
 
   try {
     let rcode = 0;
@@ -673,13 +673,13 @@ async function queryCheckpoint(
     let statusLabel = 'Propagated';
     if (rcode === 3) {
       status = 'nxdomain';
-      statusLabel = 'NXDOMAIN';
+      statusLabel = 'Non-Propagated';
     } else if (rcode !== 0) {
       status = 'error';
-      statusLabel = `SERVFAIL (${rcode})`;
+      statusLabel = 'Non-Propagated';
     } else if (answers.length === 0) {
       status = 'nodata';
-      statusLabel = 'No Records';
+      statusLabel = 'Non-Propagated';
     }
 
     return {
@@ -696,7 +696,7 @@ async function queryCheckpoint(
       statusLabel,
       answers,
       primaryValue: answers[0]?.value ?? null,
-      matchesConsensus: false,
+      matchesConsensus: status === 'resolved' && answers.length > 0,
       latencyMs,
     };
   } catch (err) {
@@ -713,7 +713,7 @@ async function queryCheckpoint(
       provider: cp.provider,
       transport: cp.mode === 'doh-wire' ? 'DoH RFC 8484' : cp.ecsSubnet ? 'DoH + ECS' : 'DoH JSON',
       status: isTimeout ? ('timeout' as const) : ('error' as const),
-      statusLabel: isTimeout ? 'Timed Out' : 'Unreachable',
+      statusLabel: 'Non-Propagated',
       answers: [] as RegionalAnswerItem[],
       primaryValue: null,
       matchesConsensus: false,

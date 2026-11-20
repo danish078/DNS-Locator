@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { formatTtl } from '../lib/domain';
+import { useI18n } from '../lib/i18n';
 import {
   ALL_ZONE_RECORD_TYPES,
   type DnsLookupResponse,
@@ -33,6 +34,7 @@ export default function AllRecordsResults({
   error,
   onInspectPropagationType,
 }: AllRecordsResultsProps) {
+  const { t } = useI18n();
   const [activeType, setActiveType] = useState<'ALL' | DnsRecordType>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -136,20 +138,20 @@ export default function AllRecordsResults({
         <div className="flex-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-col justify-between gap-6">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Parallel All-Record Zone Inspector (Cloudflare 1.1.1.1 DoH)
+              {t('allRecordsTitle')}
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              Simultaneously queries A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, and DMARC records via Cloudflare&apos;s DNS over HTTPS JSON API.
+              {t('allRecordsDesc')}
             </p>
           </div>
 
           <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-8 text-center flex flex-col items-center justify-center flex-1">
             <Server className="w-8 h-8 text-slate-400 dark:text-slate-500 mb-3" aria-hidden="true" />
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              Ready for parallel zone lookup
+              {t('readyZoneLookup')}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">
-              Enter any domain or URL above. Results include record values, TTL durations, MX priorities, DNSSEC validation, and SPF/DMARC verification.
+              {t('readyZoneLookupDesc')}
             </p>
           </div>
         </div>
@@ -194,11 +196,11 @@ export default function AllRecordsResults({
               <span className="text-slate-600 dark:text-slate-300">{data.resolver}</span>
               <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
               <span className="text-slate-600 dark:text-slate-300 tabular-nums">
-                {data.records.length} records
+                {data.records.length} {t('recordsFound')}
               </span>
               <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
               <span className="text-slate-500 dark:text-slate-400 tabular-nums">
-                {data.cached ? 'Cached (5m)' : `Live ${data.queryTimeMs} ms`}
+                {data.cached ? t('cachedLabel') : `${t('liveLabel')} ${data.queryTimeMs} ms`}
               </span>
             </div>
 
@@ -239,10 +241,10 @@ export default function AllRecordsResults({
                   <span className="text-slate-500 dark:text-slate-400">MX</span>
                   <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
                   <span className={data.emailHealth.hasMx ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>
-                    {data.emailHealth.hasMx ? `${data.emailHealth.mxCount} Configured` : 'None Found'}
+                    {data.emailHealth.hasMx ? `${data.emailHealth.mxCount} ${t('configured')}` : t('noneFound')}
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate font-mono">
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate font-mono" dir="ltr">
                   {data.recordsByType.MX?.[0]?.data ?? 'No inbound mail server'}
                 </p>
               </div>
@@ -259,10 +261,10 @@ export default function AllRecordsResults({
                   <span className="text-slate-500 dark:text-slate-400">SPF</span>
                   <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
                   <span className={data.emailHealth.hasSpf ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>
-                    {data.emailHealth.hasSpf ? 'Present' : 'Missing'}
+                    {data.emailHealth.hasSpf ? t('present') : t('missingLabel')}
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate font-mono">
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate font-mono" dir="ltr">
                   {data.emailHealth.spfRecord ?? 'No v=spf1 TXT record'}
                 </p>
               </div>
@@ -281,10 +283,10 @@ export default function AllRecordsResults({
                   <span className={data.emailHealth.hasDmarc ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}>
                     {data.emailHealth.hasDmarc
                       ? `p=${data.emailHealth.dmarcPolicy ?? 'configured'}`
-                      : 'Missing'}
+                      : t('missingLabel')}
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate font-mono">
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate font-mono" dir="ltr">
                   {data.emailHealth.dmarcRecord ?? 'No _dmarc TXT record'}
                 </p>
               </div>
@@ -310,13 +312,13 @@ export default function AllRecordsResults({
                         : 'text-slate-600 dark:text-slate-400'
                     }
                   >
-                    {data.dnssecValidated ? 'Validated (AD)' : 'Unsigned'}
+                    {data.dnssecValidated ? t('validatedAd') : t('unsigned')}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                   {data.dnssecValidated
-                    ? 'Cryptographic chain verified'
-                    : 'No AD signature returned'}
+                    ? t('cryptoVerified')
+                    : t('noAdSignature')}
                 </p>
               </div>
             </div>
@@ -334,7 +336,7 @@ export default function AllRecordsResults({
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
-                All ({data.records.length})
+                {t('continentAll')} ({data.records.length})
               </button>
               {ALL_ZONE_RECORD_TYPES.map((type) => {
                 const count = data.recordsByType[type]?.length ?? 0;
@@ -368,8 +370,8 @@ export default function AllRecordsResults({
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Filter records…"
-                  aria-label="Filter DNS records"
+                  placeholder={t('filterRecordsPlaceholder')}
+                  aria-label={t('filterRecordsPlaceholder')}
                   className="w-full h-8 pl-8 pr-2.5 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
@@ -381,7 +383,7 @@ export default function AllRecordsResults({
                   className="h-8 px-2.5 text-xs font-medium rounded-md border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/60 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   <Globe className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Check {activeType} Regions</span>
+                  <span>{activeType} · {t('checkRegionsBtn')}</span>
                 </button>
               )}
             </div>
@@ -393,12 +395,12 @@ export default function AllRecordsResults({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <th className="py-2.5 px-4 whitespace-nowrap w-20">Type</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap">Name</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap text-right w-20">Priority</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap">Value</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap text-right w-24">TTL</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap text-right w-16">Copy</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap w-20">{t('colType')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap">{t('colName')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap text-right w-20">{t('colPriority')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap">{t('colValue')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap text-right w-24">{t('colTtl')}</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap text-right w-16">{t('colCopy')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-sm">

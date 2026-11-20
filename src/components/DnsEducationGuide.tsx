@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 interface RecordGuideItem {
   type: string;
@@ -99,6 +100,7 @@ const FAQ_ITEMS = [
 ];
 
 export default function DnsEducationGuide() {
+  const { t } = useI18n();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
@@ -110,24 +112,24 @@ export default function DnsEducationGuide() {
       {/* Intro */}
       <div className="max-w-3xl">
         <p className="text-xs font-semibold tracking-wide text-sky-700 dark:text-sky-400">
-          Reference &amp; Troubleshooting Guide
+          {t('guideKicker')}
         </p>
         <h2
           id="guide-heading"
           className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2 tracking-tight"
           style={{ textWrap: 'balance' }}
         >
-          Understanding DNS Records, Global Propagation, and Mail Health
+          {t('guideHeading')}
         </h2>
         <p className="text-base text-slate-600 dark:text-slate-300 mt-3 leading-relaxed">
-          The Domain Name System translates human-readable hostnames into IP addresses and routing metadata. When you update a DNS record at your provider, recursive resolvers worldwide cache the previous answer until its Time to Live (TTL) expires—making multi-region checks essential before declaring a launch complete.
+          {t('guideIntro')}
         </p>
       </div>
 
       {/* Section 1: DNS Record Types */}
       <div>
         <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">
-          01. Core DNS Record Types Explained
+          {t('guideSec1')}
         </h3>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
           {DNS_RECORD_GUIDE.map((item) => (
@@ -161,7 +163,7 @@ export default function DnsEducationGuide() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            02. How DNS Propagation &amp; TTL Caching Work
+            {t('guideSec2')}
           </h3>
           <div className="text-sm text-slate-600 dark:text-slate-300 space-y-3 leading-relaxed">
             <p>
@@ -178,7 +180,7 @@ export default function DnsEducationGuide() {
 
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            03. Troubleshooting Common Domain &amp; Email Errors
+            {t('guideSec3')}
           </h3>
           <dl className="space-y-3.5 text-sm">
             <div>
@@ -220,7 +222,7 @@ export default function DnsEducationGuide() {
       {/* Section 3: FAQ Accordion */}
       <div className="max-w-3xl">
         <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">
-          04. Frequently Asked Questions
+          {t('guideSec4')}
         </h3>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
           {FAQ_ITEMS.map((item, index) => {
