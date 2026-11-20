@@ -22,7 +22,6 @@ interface PropagationResultsProps {
   error: string | null;
   expectedValue: string;
   onExpectedValueChange: (val: string) => void;
-  onQuickDomain: (domain: string) => void;
 }
 
 const CONTINENTS: ContinentKey[] = [
@@ -79,7 +78,6 @@ export default function PropagationResults({
   error,
   expectedValue,
   onExpectedValueChange,
-  onQuickDomain,
 }: PropagationResultsProps) {
   const [continent, setContinent] = useState<ContinentKey>('All');
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
@@ -165,28 +163,13 @@ export default function PropagationResults({
 
       {!data && !isLoading && !error && (
         <div className="flex-1 rounded-xl border border-slate-200 bg-white p-6 flex flex-col justify-between gap-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">
-                Global DNS Propagation Map &amp; Regional Resolvers
-              </h2>
-              <p className="text-sm text-slate-600 mt-1">
-                Enter a domain above to verify how 18 worldwide checkpoints resolve your DNS records in real time.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-slate-500">Try:</span>
-              {['cloudflare.com', 'netflix.com', 'github.com'].map((sample) => (
-                <button
-                  key={sample}
-                  type="button"
-                  onClick={() => onQuickDomain(sample)}
-                  className="px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 text-slate-700 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-800 transition-colors font-mono"
-                >
-                  {sample}
-                </button>
-              ))}
-            </div>
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-base font-semibold text-slate-900">
+              Global DNS Propagation Map &amp; Regional Resolvers
+            </h2>
+            <p className="text-sm text-slate-600 mt-1">
+              Enter a domain above to verify how 18 worldwide checkpoints resolve your DNS records in real time.
+            </p>
           </div>
 
           <WorldPropagationMap

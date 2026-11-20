@@ -2,5 +2,7 @@
   "name": "dnslocator.online",
   "description": "Free global DNS propagation checker across 18 worldwide regions and instant all-record lookup powered by Cloudflare 1.1.1.1 DNS over HTTPS.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

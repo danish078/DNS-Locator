@@ -400,9 +400,6 @@ export default function App() {
                   >
                     Global DNS Propagation &amp; Record Lookup
                   </h1>
-                  <p className="text-sm sm:text-base text-slate-600 mt-2">
-                    Check DNS propagation across 18 worldwide regions or inspect every zone record in parallel via Cloudflare 1.1.1.1 DoH.
-                  </p>
                 </div>
 
                 {/* Mode Switcher */}
@@ -515,72 +512,75 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Live Sanitization & Recent Lookups Metadata Row (unboxed typography) */}
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {rawInput.trim() && sanitizedPreview.wasModified && sanitizedPreview.isValid ? (
-                      <span>
-                        Normalized hostname:{' '}
-                        <strong className="font-mono text-slate-800">
-                          {sanitizedPreview.domain}
-                        </strong>
-                      </span>
-                    ) : (
-                      <span>
-                        Resolver: Cloudflare 1.1.1.1 DoH &amp; 18 Global Nodes · 5m Cache
-                      </span>
-                    )}
-
-                    {sanitizedPreview.isValid &&
-                      sanitizedPreview.apexDomain !== sanitizedPreview.domain && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <button
-                            type="button"
-                            onClick={() => handleQuickDomain(sanitizedPreview.apexDomain)}
-                            className="text-sky-700 hover:underline font-medium"
-                          >
-                            Check apex ({sanitizedPreview.apexDomain})
-                          </button>
-                        </>
-                      )}
-                  </div>
-
-                  {recentLookups.length > 0 && (
+                {/* Live Sanitization & Recent Lookups Metadata Row */}
+                {((rawInput.trim() && sanitizedPreview.wasModified && sanitizedPreview.isValid) ||
+                  (sanitizedPreview.isValid &&
+                    sanitizedPreview.apexDomain !== sanitizedPreview.domain) ||
+                  recentLookups.length > 0) && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-0.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span>Recent:</span>
-                      {recentLookups.slice(0, 4).map((entry, idx) => (
-                        <span
-                          key={`${entry.domain}-${entry.mode}-${entry.recordType ?? ''}`}
-                          className="inline-flex items-center gap-2"
-                        >
-                          {idx > 0 && (
-                            <span className="text-slate-300" aria-hidden="true">
-                              /
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRawInput(entry.domain);
-                              setMode(entry.mode);
-                              if (entry.recordType) {
-                                setRecordType(entry.recordType as DnsRecordType);
-                              }
-                              executeLookup(entry.domain, {
-                                targetMode: entry.mode,
-                                targetType: entry.recordType as DnsRecordType | undefined,
-                              });
-                            }}
-                            className="font-mono text-slate-700 hover:text-sky-700 hover:underline"
-                          >
-                            {entry.domain}
-                          </button>
+                      {rawInput.trim() && sanitizedPreview.wasModified && sanitizedPreview.isValid && (
+                        <span>
+                          Normalized hostname:{' '}
+                          <strong className="font-mono text-slate-800">
+                            {sanitizedPreview.domain}
+                          </strong>
                         </span>
-                      ))}
+                      )}
+
+                      {sanitizedPreview.isValid &&
+                        sanitizedPreview.apexDomain !== sanitizedPreview.domain && (
+                          <>
+                            {rawInput.trim() && sanitizedPreview.wasModified && (
+                              <span aria-hidden="true">·</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleQuickDomain(sanitizedPreview.apexDomain)}
+                              className="text-sky-700 hover:underline font-medium"
+                            >
+                              Check apex ({sanitizedPreview.apexDomain})
+                            </button>
+                          </>
+                        )}
                     </div>
-                  )}
-                </div>
+
+                    {recentLookups.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>Recent:</span>
+                        {recentLookups.slice(0, 4).map((entry, idx) => (
+                          <span
+                            key={`${entry.domain}-${entry.mode}-${entry.recordType ?? ''}`}
+                            className="inline-flex items-center gap-2"
+                          >
+                            {idx > 0 && (
+                              <span className="text-slate-300" aria-hidden="true">
+                                /
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRawInput(entry.domain);
+                                setMode(entry.mode);
+                                if (entry.recordType) {
+                                  setRecordType(entry.recordType as DnsRecordType);
+                                }
+                                executeLookup(entry.domain, {
+                                  targetMode: entry.mode,
+                                  targetType: entry.recordType as DnsRecordType | undefined,
+                                });
+                              }}
+                              className="font-mono text-slate-700 hover:text-sky-700 hover:underline"
+                            >
+                              {entry.domain}
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </form>
             </section>
 
@@ -592,7 +592,6 @@ export default function App() {
                 error={error}
                 expectedValue={expectedValue}
                 onExpectedValueChange={setExpectedValue}
-                onQuickDomain={handleQuickDomain}
               />
             ) : (
               <AllRecordsResults
