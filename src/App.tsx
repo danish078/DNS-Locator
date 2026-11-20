@@ -289,16 +289,23 @@ export default function App() {
       {/* Strict 3-Zone Top Bar Contract */}
       <header className="border-b border-slate-200 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
-          {/* Zone 1: Single-element brand wordmark */}
+          {/* Zone 1: Brand mark & wordmark */}
           <a
             href="/"
             onClick={(e) => {
               e.preventDefault();
               navigate('home');
             }}
-            className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 font-[var(--font-display)]"
+            className="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 font-[var(--font-display)]"
           >
-            dnslocator.online
+            <img
+              src="/favicon.svg"
+              alt=""
+              width={24}
+              height={24}
+              className="w-6 h-6 shrink-0"
+            />
+            <span>dnslocator.online</span>
           </a>
 
           {/* Zone 2: 4 concise single-line text links */}

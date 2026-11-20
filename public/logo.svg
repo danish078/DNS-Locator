@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 56" width="264" height="56" fill="none">
+  <!-- Icon mark -->
+  <rect x="4" y="4" width="48" height="48" rx="11" fill="#0F172A"/>
+  <rect x="5" y="5" width="46" height="46" rx="10" stroke="#1E293B" stroke-width="1.2"/>
+  <circle cx="28" cy="28" r="15" stroke="#38BDF8" stroke-opacity="0.32" stroke-width="1.4"/>
+  <ellipse cx="28" cy="28" rx="15" ry="6.8" transform="rotate(-24 28 28)" stroke="#38BDF8" stroke-opacity="0.45" stroke-width="1.2"/>
+  <path d="M17.5 35.5 L28 25 L39.5 20.5" stroke="#38BDF8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28 25 L37 37.5" stroke="#38BDF8" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="17.5" cy="35.5" r="2.7" fill="#0284C7" stroke="#FFFFFF" stroke-width="1.2"/>
+  <circle cx="39.5" cy="20.5" r="2.7" fill="#0284C7" stroke="#FFFFFF" stroke-width="1.2"/>
+  <circle cx="37" cy="37.5" r="2.7" fill="#0284C7" stroke="#FFFFFF" stroke-width="1.2"/>
+  <path d="M28 13.5 C23.4 13.5 19.7 17.2 19.7 21.8 C19.7 27.4 28 35.5 28 35.5 C28 35.5 36.3 27.4 36.3 21.8 C36.3 17.2 32.6 13.5 28 13.5 Z" fill="#FFFFFF"/>
+  <circle cx="28" cy="21.8" r="3.4" fill="#0284C7"/>
+
+  <!-- Wordmark -->
+  <text x="64" y="34" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="21" font-weight="700" letter-spacing="-0.02em" fill="#0F172A">dnslocator<tspan fill="#0284C7">.online</tspan></text>
+</svg>
