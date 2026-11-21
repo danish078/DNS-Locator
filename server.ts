@@ -1038,27 +1038,22 @@ async function startServer() {
   const dnsCache = new TtlMemoryCache<Record<string, unknown>>(500);
   const propagationCache = new TtlMemoryCache<Record<string, unknown>>(500);
 
-  // SEO: robots.txt blocking dynamic ?domain= query URLs & API endpoints
+  // SEO: robots.txt allowing indexing of all pages and linking sitemap.xml
   app.get('/robots.txt', (req: Request, res: Response) => {
     const origin =
       process.env.APP_URL?.replace(/\/$/, '') ||
       `${req.protocol}://${req.get('host') || 'dnslocator.online'}`;
-    res.type('text/plain').send(
-      [
-        'User-agent: *',
-        'Allow: /',
-        'Allow: /about',
-        'Allow: /contact',
-        'Allow: /privacy',
-        'Allow: /terms',
-        'Allow: /disclaimer',
-        'Disallow: /*?domain=*',
-        'Disallow: /*?q=*',
-        'Disallow: /api/',
-        `Sitemap: ${origin}/sitemap.xml`,
-        '',
-      ].join('\n')
-    );
+    const publicRobotsPath = path.resolve(__dirname, 'public/robots.txt');
+    if (fs.existsSync(publicRobotsPath)) {
+      const template = fs.readFileSync(publicRobotsPath, 'utf-8');
+      res
+        .type('text/plain')
+        .send(template.replace(/https:\/\/dnslocator\.online/g, origin));
+      return;
+    }
+    res
+      .type('text/plain')
+      .send(['User-agent: *', 'Allow: /', '', `Sitemap: ${origin}/sitemap.xml`, ''].join('\n'));
   });
 
   // SEO: sitemap.xml with only static authoritative pages (no programmatic /dns/* pages)
@@ -1148,7 +1143,7 @@ async function startServer() {
     const domain = sanitizeServerDomain(rawDomain);
     if (!domain) {
       return res.status(400).json({
-        error: 'Invalid domain name. Enter a valid hostname such as example.com.',
+        error: 'Invalid domain name. Enter a valid hostname such as www.dnslocator.online.',
       });
     }
 
@@ -1279,7 +1274,7 @@ async function startServer() {
         error:
           recordType === 'PTR'
             ? 'Enter a valid IPv4 address (e.g., 1.1.1.1) or .in-addr.arpa hostname.'
-            : 'Invalid domain name. Enter a valid hostname such as example.com.',
+            : 'Invalid domain name. Enter a valid hostname such as www.dnslocator.online.',
       });
     }
 
@@ -1422,10 +1417,16 @@ async function startServer() {
   }
 
   const injectHeadVerification = (html: string): string => {
-    if (!googleVerifyToken || html.includes('name="google-site-verification"')) {
+    if (!googleVerifyToken) {
       return html;
     }
     const escaped = googleVerifyToken.replace(/"/g, '&quot;');
+    if (html.includes('name="google-site-verification"')) {
+      return html.replace(
+        /(<meta\s+name="google-site-verification"\s+content=")[^"]*(")/i,
+        `$1${escaped}$2`
+      );
+    }
     return html.replace(
       '</head>',
       `    <meta name="google-site-verification" content="${escaped}" />\n  </head>`

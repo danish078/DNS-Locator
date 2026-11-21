@@ -27,12 +27,11 @@ import PWAInstallButton from './components/PWAInstallButton';
 import { NotFoundTemplate } from './components/StatusTemplates';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import {
-  initAdSenseIfConfigured,
-  initGoogleAnalytics,
-  injectSearchConsoleVerificationTag,
+  initializeTracking,
+  isAdSenseEnabled,
   trackAnalyticsPageView,
   trackDnsLookupEvent,
-} from './lib/analytics';
+} from './lib/tracking';
 import {
   addRecentLookup,
   clearAllDnsCache,
@@ -107,6 +106,7 @@ export default function App() {
 
   const debounceTimerRef = useRef<number | null>(null);
   const domainInputRef = useRef<HTMLInputElement | null>(null);
+  const adsEnabled = isAdSenseEnabled();
 
   const isLoading = isPropLoading || isAllLoading;
 
@@ -125,11 +125,9 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Initialize Google Search Console verification, GA4 (Consent Mode v2), and AdSense if configured
+  // Initialize Google Analytics and Google Search Console only if .env IDs are populated
   useEffect(() => {
-    injectSearchConsoleVerificationTag();
-    initGoogleAnalytics(getSavedCookieConsent().choice);
-    initAdSenseIfConfigured();
+    initializeTracking(getSavedCookieConsent().choice);
   }, []);
 
   // Sync theme class, localStorage, and theme-color meta tag
@@ -211,11 +209,6 @@ export default function App() {
     const canonicalUrl = `${window.location.origin}${cleanPath}`;
     canonical.setAttribute('href', canonicalUrl);
 
-    const ogUrl = document.querySelector('meta[property="og:url"]');
-    if (ogUrl) {
-      ogUrl.setAttribute('content', canonicalUrl);
-    }
-
     const titles: Record<AppRoute, string> = {
       home: 'DNS Locator – Global DNS Propagation & Record Lookup',
       about: 'About – DNS Locator',
@@ -225,9 +218,53 @@ export default function App() {
       disclaimer: 'Disclaimer – DNS Locator',
       'not-found': 'Page Not Found – DNS Locator',
     };
-    document.title = titles[route];
+
+    const descriptions: Record<AppRoute, string> = {
+      home: 'Global DNS Propagation & Record Lookup — Verify live A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA DNS records across 18 regions in seconds with DNS Locator.',
+      about: 'Learn how DNS Locator verifies live DNS propagation across 18 global resolver regions using public DNS over HTTPS (DoH) lookups.',
+      contact: 'Contact the DNS Locator team for technical support, DNS diagnostic feedback, privacy inquiries, or general service questions.',
+      privacy: 'Read the DNS Locator Privacy Policy and GDPR disclosures covering DNS lookup queries, cookie consent choices, analytics, and ad settings.',
+      terms: 'Review the DNS Locator Terms and Conditions governing acceptable use of our global DNS propagation checker and record diagnostic tools.',
+      disclaimer: 'Read the DNS Locator Disclaimer regarding informational public DNS lookup results, registrar independence, and global cache propagation.',
+      'not-found': 'The requested DNS Locator page could not be found. Return to the homepage to run a global DNS propagation or record lookup.',
+    };
+
+    const activeTitle = titles[route];
+    const activeDescription = descriptions[route];
+
+    document.title = activeTitle;
+
+    let descriptionMeta = document.querySelector('meta[name="description"]');
+    if (!descriptionMeta) {
+      descriptionMeta = document.createElement('meta');
+      descriptionMeta.setAttribute('name', 'description');
+      document.head.appendChild(descriptionMeta);
+    }
+    descriptionMeta.setAttribute('content', activeDescription);
+
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) {
+      ogUrl.setAttribute('content', canonicalUrl);
+    }
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) {
+      ogTitle.setAttribute('content', activeTitle);
+    }
+    const ogDescription = document.querySelector('meta[property="og:description"]');
+    if (ogDescription) {
+      ogDescription.setAttribute('content', activeDescription);
+    }
+    const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+    if (twitterTitle) {
+      twitterTitle.setAttribute('content', activeTitle);
+    }
+    const twitterDescription = document.querySelector('meta[name="twitter:description"]');
+    if (twitterDescription) {
+      twitterDescription.setAttribute('content', activeDescription);
+    }
+
     if (route !== 'not-found') {
-      trackAnalyticsPageView(cleanPath, titles[route]);
+      trackAnalyticsPageView(cleanPath, activeTitle);
     }
   }, [route, propagationData, allRecordsData]);
 
@@ -454,7 +491,11 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100 transition-colors">
       {/* Strict 3-Zone Top Bar Contract */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-[68px] flex items-center justify-between gap-4 sm:gap-6">
+        <div
+          className={`mx-auto px-4 sm:px-6 h-16 sm:h-[68px] flex items-center justify-between gap-4 sm:gap-6 ${
+            adsEnabled ? 'max-w-7xl' : 'max-w-6xl'
+          }`}
+        >
           {/* Zone 1: Brand mark & larger wordmark */}
           <a
             href="/"
@@ -537,7 +578,11 @@ export default function App() {
       </header>
 
       {/* Main Content + AdSense-Ready Responsive Shell */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-7 sm:py-9">
+      <main
+        className={`flex-1 w-full mx-auto px-4 sm:px-6 py-7 sm:py-9 ${
+          adsEnabled ? 'max-w-7xl' : 'max-w-6xl'
+        }`}
+      >
         {cacheBanner && (
           <div
             role="status"
@@ -562,10 +607,16 @@ export default function App() {
           />
         ) : (
           <>
-            {/* Top AdSense Slot Wrapper (empty & buffered from navigation/controls) */}
+            {/* Top AdSense Slot Wrapper (renders cleanly when AdSense is active) */}
             <AdSlotWrapper placement="top" />
 
-            <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8 xl:items-start">
+            <div
+              className={
+                adsEnabled
+                  ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8 xl:items-start'
+                  : ''
+              }
+            >
               <div className="min-w-0">
                 {route !== 'home' ? (
                   <LegalPages
@@ -1090,13 +1141,15 @@ export default function App() {
                 )}
               </div>
 
-              {/* Sidebar AdSense Slot Wrapper (sticky on desktop, gracefully below content on mobile) */}
-              <div className="mt-8 xl:mt-0 xl:sticky xl:top-24 shrink-0">
-                <AdSlotWrapper placement="sidebar" />
-              </div>
+              {/* Sidebar AdSense Slot Wrapper (rendered when AdSense is active) */}
+              {adsEnabled && (
+                <div className="mt-8 xl:mt-0 xl:sticky xl:top-24 shrink-0">
+                  <AdSlotWrapper placement="sidebar" />
+                </div>
+              )}
             </div>
 
-            {/* Bottom AdSense Slot Wrapper (empty & buffered above footer) */}
+            {/* Bottom AdSense Slot Wrapper (rendered when AdSense is active) */}
             <AdSlotWrapper placement="bottom" />
           </>
         )}
@@ -1104,7 +1157,11 @@ export default function App() {
 
       {/* Compliant Trust Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400">
+        <div
+          className={`mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400 ${
+            adsEnabled ? 'max-w-7xl' : 'max-w-6xl'
+          }`}
+        >
           <div className="space-y-1">
             <p className="font-semibold text-slate-700 dark:text-slate-200">
               {t('footerTagline')}
@@ -1149,13 +1206,6 @@ export default function App() {
               className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
             >
               {t('navDisclaimer')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsCookiePopupOpen(true)}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
-            >
-              {t('navCookiesNotice')}
             </button>
           </nav>
         </div>

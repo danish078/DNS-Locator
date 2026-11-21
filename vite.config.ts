@@ -2,12 +2,26 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, loadEnv} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+export default defineConfig(({mode}) => {
+  const env = loadEnv(mode, '.', '');
+  const siteVerificationToken = (
+    env.VITE_GOOGLE_SITE_VERIFICATION ||
+    env.GOOGLE_SITE_VERIFICATION ||
+    ''
+  ).trim();
+
   return {
     plugins: [
+      {
+        name: 'google-site-verification-html',
+        transformIndexHtml(html) {
+          const escaped = siteVerificationToken.replace(/"/g, '&quot;');
+          return html.replace(/%VITE_GOOGLE_SITE_VERIFICATION%/g, escaped);
+        },
+      },
       react(),
       tailwindcss(),
       VitePWA({
@@ -55,14 +69,57 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
+          globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff,woff2,webmanifest}'],
           navigateFallbackDenylist: [/^\/api\//, /^\/robots\.txt$/, /^\/sitemap\.xml$/],
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'CacheFirst',
+              urlPattern: ({ request, url }) =>
+                url.origin === self.location.origin &&
+                !url.pathname.startsWith('/api/') &&
+                (request.destination === 'script' ||
+                  request.destination === 'style' ||
+                  request.destination === 'image' ||
+                  request.destination === 'font' ||
+                  request.destination === 'manifest'),
+              handler: 'StaleWhileRevalidate',
               options: {
-                cacheName: 'google-fonts-cache',
+                cacheName: 'core-site-assets',
+                expiration: {
+                  maxEntries: 80,
+                  maxAgeSeconds: 60 * 60 * 24 * 30,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              urlPattern: ({ request, url }) =>
+                url.origin === self.location.origin &&
+                request.mode === 'navigate' &&
+                !url.pathname.startsWith('/api/') &&
+                url.pathname !== '/robots.txt' &&
+                url.pathname !== '/sitemap.xml',
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'core-pages-cache',
+                expiration: {
+                  maxEntries: 30,
+                  maxAgeSeconds: 60 * 60 * 24 * 7,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'google-fonts-stylesheets',
                 expiration: {
                   maxEntries: 10,
                   maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -89,7 +146,7 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
+          enabled: process.env.DISABLE_HMR !== 'true',
           type: 'module',
         },
       }),
@@ -108,6 +165,18 @@ export default defineConfig(() => {
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
+          }
+
+          // Ensure robots.txt is present in dist/ with optional APP_URL sitemap origin
+          const publicRobots = path.resolve(__dirname, 'public/robots.txt');
+          const distRobots = path.resolve(distDir, 'robots.txt');
+          if (fs.existsSync(distDir) && fs.existsSync(publicRobots)) {
+            const rawRobots = fs.readFileSync(publicRobots, 'utf-8');
+            const appOrigin = (env.APP_URL || env.VITE_APP_URL || '').trim().replace(/\/$/, '');
+            const outputRobots = appOrigin
+              ? rawRobots.replace(/https:\/\/dnslocator\.online/g, appOrigin)
+              : rawRobots;
+            fs.writeFileSync(distRobots, outputRobots, 'utf-8');
           }
         },
       },

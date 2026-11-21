@@ -795,14 +795,7 @@ export default {
         [
           'User-agent: *',
           'Allow: /',
-          'Allow: /about',
-          'Allow: /contact',
-          'Allow: /privacy',
-          'Allow: /terms',
-          'Allow: /disclaimer',
-          'Disallow: /*?domain=*',
-          'Disallow: /*?q=*',
-          'Disallow: /api/',
+          '',
           `Sitemap: ${origin}/sitemap.xml`,
           '',
         ].join('\n'),
@@ -898,7 +891,7 @@ export default {
       const domain = sanitizeDomain(url.searchParams.get('domain') || '');
       if (!domain) {
         return jsonResponse(
-          { error: 'Invalid domain name. Enter a valid hostname such as example.com.' },
+          { error: 'Invalid domain name. Enter a valid hostname such as www.dnslocator.online.' },
           400,
           rateHeaders
         );
@@ -1032,7 +1025,7 @@ export default {
             error:
               recordType === 'PTR'
                 ? 'Enter a valid IPv4 address (e.g., 1.1.1.1) or .in-addr.arpa hostname.'
-                : 'Invalid domain name. Enter a valid hostname such as example.com.',
+                : 'Invalid domain name. Enter a valid hostname such as www.dnslocator.online.',
           },
           400,
           rateHeaders

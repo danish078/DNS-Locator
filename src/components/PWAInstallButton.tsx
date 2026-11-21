@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, Download, Monitor, Smartphone, X } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
@@ -6,21 +6,58 @@ interface PWAInstallButtonProps {
   variant?: 'header' | 'inline';
 }
 
+function formatDownloadedDate(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return null;
+  }
+}
+
 export default function PWAInstallButton({ variant = 'header' }: PWAInstallButtonProps) {
-  const { isInstallable, isInstalled, isIOS, hasDownloadedBefore, markAsDownloaded, install } =
-    usePWAInstall();
+  const {
+    isInstallable,
+    isInstalled,
+    isIOS,
+    isPrompting,
+    hasDownloadedBefore,
+    downloadedAt,
+    markAsDownloaded,
+    install,
+  } = usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
   const [showRedownloadConfirm, setShowRedownloadConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!showRedownloadConfirm && !showGuide) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowRedownloadConfirm(false);
+        setShowGuide(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showRedownloadConfirm, showGuide]);
 
   if (isInstalled) {
     return null;
   }
 
   const startInstallFlow = async () => {
+    if (isPrompting) return;
     if (isInstallable) {
       const accepted = await install();
       if (accepted) {
         markAsDownloaded();
+        setShowGuide(false);
       } else {
         setShowGuide(true);
       }
@@ -31,10 +68,17 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
   };
 
   const handleClick = async () => {
+    // Prevent redundant prompts if a dialog or native install prompt is already active
+    if (isPrompting || showRedownloadConfirm || showGuide) {
+      return;
+    }
+
     if (hasDownloadedBefore) {
+      setShowGuide(false);
       setShowRedownloadConfirm(true);
       return;
     }
+
     await startInstallFlow();
   };
 
@@ -43,16 +87,25 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
     await startInstallFlow();
   };
 
+  const formattedDate = formatDownloadedDate(downloadedAt);
+
   const buttonClasses =
     variant === 'header'
-      ? 'h-9 px-3.5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer'
-      : 'h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer';
+      ? 'h-9 px-3.5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed'
+      : 'h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed';
 
   return (
     <>
       <button
         type="button"
         onClick={handleClick}
+        disabled={isPrompting}
+        aria-busy={isPrompting}
+        aria-label={
+          hasDownloadedBefore
+            ? 'DNS Locator already downloaded — click to confirm re-install'
+            : 'Install DNS Locator app'
+        }
         className={buttonClasses}
       >
         <Download className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
@@ -65,8 +118,13 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
           role="dialog"
           aria-modal="true"
           aria-labelledby="pwa-redownload-title"
+          aria-describedby="pwa-redownload-desc"
+          onClick={() => setShowRedownloadConfirm(false)}
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl space-y-4">
+          <div
+            className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -79,8 +137,12 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
                   >
                     App Already Downloaded
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
-                    You have already downloaded or installed DNS Locator on this device. Do you want to download it again?
+                  <p
+                    id="pwa-redownload-desc"
+                    className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed"
+                  >
+                    You have already downloaded or installed DNS Locator on this device
+                    {formattedDate ? ` (${formattedDate})` : ''}. Do you want to re-install or download it again?
                   </p>
                 </div>
               </div>
@@ -120,8 +182,12 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
           role="dialog"
           aria-modal="true"
           aria-labelledby="pwa-install-title"
+          onClick={() => setShowGuide(false)}
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl space-y-4">
+          <div
+            className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <img

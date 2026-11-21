@@ -14,57 +14,57 @@ const DNS_RECORD_GUIDE: RecordGuideItem[] = [
   {
     type: 'A',
     name: 'Address Record (IPv4)',
-    purpose: 'Maps a hostname such as example.com or app.example.com directly to a 32-bit IPv4 server address.',
-    example: 'example.com. 300 IN A 93.184.216.34',
+    purpose: 'Maps a hostname such as www.dnslocator.online or dnslocator.online directly to a 32-bit IPv4 server address.',
+    example: 'www.dnslocator.online. 300 IN A 93.184.216.34',
     notes: 'Multiple A records on the same host create simple round-robin load distribution.',
   },
   {
     type: 'AAAA',
     name: 'IPv6 Address Record',
     purpose: 'Maps a hostname to a 128-bit IPv6 address for modern dual-stack networks and mobile carriers.',
-    example: 'example.com. 300 IN AAAA 2606:2800:220:1:248:1893:25c8:1946',
+    example: 'www.dnslocator.online. 300 IN AAAA 2606:2800:220:1:248:1893:25c8:1946',
     notes: 'If AAAA points to an old server while A points to a new one, IPv6 visitors will reach the wrong host.',
   },
   {
     type: 'CNAME',
     name: 'Canonical Name Alias',
     purpose: 'Aliases one subdomain to another hostname so IP updates at the target automatically carry over.',
-    example: 'www.example.com. 3600 IN CNAME example.com.',
+    example: 'www.dnslocator.online. 3600 IN CNAME dnslocator.online.',
     notes: 'RFC rules forbid placing a CNAME alongside MX or NS records at the root apex domain.',
   },
   {
     type: 'MX',
     name: 'Mail Exchanger',
     purpose: 'Directs inbound email for a domain to specific mail servers ordered by numeric priority.',
-    example: 'example.com. 3600 IN MX 10 mail.example.com.',
+    example: 'dnslocator.online. 3600 IN MX 10 mail.dnslocator.online.',
     notes: 'Lower priority integers (e.g., 10 before 20) are tried first by sending mail transfer agents.',
   },
   {
     type: 'TXT',
     name: 'Text Record',
     purpose: 'Holds arbitrary verification strings and email authentication policies including SPF, DKIM, and DMARC.',
-    example: 'example.com. 300 IN TXT "v=spf1 include:_spf.google.com ~all"',
+    example: 'dnslocator.online. 300 IN TXT "v=spf1 include:_spf.google.com ~all"',
     notes: 'SPF records must stay under 10 DNS lookups to prevent validation failures at receiving mail servers.',
   },
   {
     type: 'NS',
     name: 'Name Server Delegation',
     purpose: 'Identifies the authoritative DNS providers responsible for answering queries about the domain zone.',
-    example: 'example.com. 86400 IN NS ns1.example-dns.net.',
+    example: 'dnslocator.online. 86400 IN NS ns1.dnslocator.online.',
     notes: 'NS updates typically carry 24–48 hour TTLs at the parent registry (.com, .org, .online).',
   },
   {
     type: 'SOA',
     name: 'Start of Authority',
     purpose: 'Stores administrative metadata for the zone: primary nameserver, hostmaster contact, serial, and negative cache TTL.',
-    example: 'ns1.example.com. admin.example.com. 2026112001 7200 900 1209600 300',
+    example: 'ns1.dnslocator.online. admin.dnslocator.online. 2026112001 7200 900 1209600 300',
     notes: 'Incrementing the serial number signals secondary nameservers to pull updated zone records.',
   },
   {
     type: 'CAA',
     name: 'Certification Authority Authorization',
     purpose: 'Restricts which Certificate Authorities (CAs) are permitted to issue TLS/SSL certificates for the domain.',
-    example: 'example.com. 3600 IN CAA 0 issue "letsencrypt.org"',
+    example: 'dnslocator.online. 3600 IN CAA 0 issue "letsencrypt.org"',
     notes: 'Helps prevent unauthorized SSL certificate issuance across subdomains.',
   },
   {
@@ -167,7 +167,7 @@ export default function DnsEducationGuide() {
           </h3>
           <div className="text-sm text-slate-600 dark:text-slate-300 space-y-3 leading-relaxed">
             <p>
-              When a browser or mail server requests <span className="font-mono text-slate-800 dark:text-slate-200">example.com</span>, it asks a recursive resolver (such as 1.1.1.1, Google 8.8.8.8, Quad9 9.9.9.9, or an ISP resolver). If the answer is absent from cache, the resolver walks the hierarchy from the root servers to the TLD registry and finally to your authoritative nameservers.
+              When a browser or mail server requests <span className="font-mono text-slate-800 dark:text-slate-200">www.dnslocator.online</span>, it asks a recursive resolver (such as 1.1.1.1, Google 8.8.8.8, Quad9 9.9.9.9, or an ISP resolver). If the answer is absent from cache, the resolver walks the hierarchy from the root servers to the TLD registry and finally to your authoritative nameservers.
             </p>
             <p>
               Every returned record carries a <strong className="font-semibold text-slate-900 dark:text-slate-100">TTL (Time to Live)</strong> in seconds. A TTL of <span className="font-mono text-slate-800 dark:text-slate-200">3600</span> tells resolvers worldwide to reuse the cached response for one full hour before checking your authoritative server again. Lowering TTL to <span className="font-mono text-slate-800 dark:text-slate-200">300</span> prior to a migration dramatically shortens cutover lag.

@@ -86,7 +86,7 @@ export function sanitizeDomainInput(
       isIpAddress: false,
       wasModified,
       apexDomain: candidate,
-      reason: 'Enter a valid domain name such as example.com or sub.example.com.',
+      reason: 'Enter a valid domain name such as www.dnslocator.online or dnslocator.online.',
     };
   }
 
