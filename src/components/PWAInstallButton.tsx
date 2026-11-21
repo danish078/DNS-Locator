@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Monitor, Smartphone, X } from 'lucide-react';
+import { AlertCircle, Download, Monitor, Smartphone, X } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface PWAInstallButtonProps {
@@ -7,22 +7,40 @@ interface PWAInstallButtonProps {
 }
 
 export default function PWAInstallButton({ variant = 'header' }: PWAInstallButtonProps) {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, hasDownloadedBefore, markAsDownloaded, install } =
+    usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
+  const [showRedownloadConfirm, setShowRedownloadConfirm] = useState(false);
 
   if (isInstalled) {
     return null;
   }
 
-  const handleClick = async () => {
+  const startInstallFlow = async () => {
     if (isInstallable) {
       const accepted = await install();
-      if (!accepted) {
+      if (accepted) {
+        markAsDownloaded();
+      } else {
         setShowGuide(true);
       }
       return;
     }
+    markAsDownloaded();
     setShowGuide(true);
+  };
+
+  const handleClick = async () => {
+    if (hasDownloadedBefore) {
+      setShowRedownloadConfirm(true);
+      return;
+    }
+    await startInstallFlow();
+  };
+
+  const handleConfirmRedownload = async () => {
+    setShowRedownloadConfirm(false);
+    await startInstallFlow();
   };
 
   const buttonClasses =
@@ -40,6 +58,61 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
         <Download className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
         <span>Install App</span>
       </button>
+
+      {showRedownloadConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px] p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pwa-redownload-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2
+                    id="pwa-redownload-title"
+                    className="text-base font-bold text-slate-900 dark:text-slate-100"
+                  >
+                    App Already Downloaded
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                    You have already downloaded or installed DNS Locator on this device. Do you want to download it again?
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRedownloadConfirm(false)}
+                aria-label="Close confirmation dialog"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowRedownloadConfirm(false)}
+                className="h-9 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+              >
+                No, Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRedownload}
+                className="h-9 px-4 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Yes, Download Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showGuide && (
         <div
@@ -74,7 +147,7 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
                 type="button"
                 onClick={() => setShowGuide(false)}
                 aria-label="Close installation guide"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -118,8 +191,11 @@ export default function PWAInstallButton({ variant = 'header' }: PWAInstallButto
 
             <button
               type="button"
-              onClick={() => setShowGuide(false)}
-              className="w-full h-10 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-white transition-colors"
+              onClick={() => {
+                markAsDownloaded();
+                setShowGuide(false);
+              }}
+              className="w-full h-10 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-white transition-colors cursor-pointer"
             >
               Done
             </button>

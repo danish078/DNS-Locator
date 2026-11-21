@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
-  Bell,
   CheckCircle2,
   Cookie,
   FileText,
@@ -11,27 +10,19 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
-import {
-  clearCookieConsent,
-  getSavedCookieConsent,
-  saveCookieConsent,
-  type CookieConsentChoice,
-} from './CookieNoticeBanner';
 
 export type LegalPageRoute =
   | 'about'
   | 'contact'
   | 'privacy'
   | 'terms'
-  | 'disclaimer'
-  | 'cookies-policy'
-  | 'cookies-notice';
+  | 'disclaimer';
 
 interface LegalPagesProps {
   page: LegalPageRoute;
   onNavigateHome: () => void;
   onNavigatePage: (page: LegalPageRoute) => void;
-  onConsentChanged?: () => void;
+  onOpenCookiePopup?: () => void;
 }
 
 const LEGAL_TABS: { id: LegalPageRoute; label: string }[] = [
@@ -40,15 +31,13 @@ const LEGAL_TABS: { id: LegalPageRoute; label: string }[] = [
   { id: 'privacy', label: 'Privacy Policy' },
   { id: 'terms', label: 'Terms and Conditions' },
   { id: 'disclaimer', label: 'Disclaimer' },
-  { id: 'cookies-policy', label: 'Cookies Policy' },
-  { id: 'cookies-notice', label: 'Cookies Notice' },
 ];
 
 export default function LegalPages({
   page,
   onNavigateHome,
   onNavigatePage,
-  onConsentChanged,
+  onOpenCookiePopup,
 }: LegalPagesProps) {
   const { t } = useI18n();
   const [name, setName] = useState('');
@@ -61,10 +50,6 @@ export default function LegalPages({
     referenceId: string;
     receivedAt: string;
   } | null>(null);
-
-  const [consentChoice, setConsentChoice] = useState<CookieConsentChoice>(
-    () => getSavedCookieConsent().choice
-  );
 
   const handleContactSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -90,18 +75,6 @@ export default function LegalPages({
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleUpdateConsent = (choice: Exclude<CookieConsentChoice, null>) => {
-    saveCookieConsent(choice);
-    setConsentChoice(choice);
-    onConsentChanged?.();
-  };
-
-  const handleResetConsent = () => {
-    clearCookieConsent();
-    setConsentChoice(null);
-    onConsentChanged?.();
   };
 
   return (
@@ -253,6 +226,25 @@ export default function LegalPages({
 
               <section className="space-y-2">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  6. Cookies Notice &amp; Browser Storage Management
+                </h2>
+                <p>
+                  By default, DNS Locator relies on strictly necessary browser <code className="font-mono text-xs">localStorage</code> for your theme setting, IP-detected language choice, and 5-minute DNS cache. Any Google Analytics or Google AdSense cookies are gated behind your EU GDPR consent choice in our Cookies Notice popup.
+                </p>
+                {onOpenCookiePopup && (
+                  <button
+                    type="button"
+                    onClick={onOpenCookiePopup}
+                    className="mt-1 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    <Cookie className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+                    <span>Open Cookies Notice Popup</span>
+                  </button>
+                )}
+              </section>
+
+              <section className="space-y-2">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   {t('privacyS3Title')}
                 </h2>
                 <p>{t('privacyS3Body')}</p>
@@ -383,184 +375,6 @@ export default function LegalPages({
                   DNS Locator may contain outbound links to official standards or policy resources. We have no control over and assume no responsibility for the content, privacy policies, or practices of external websites.
                 </p>
               </section>
-            </div>
-          </>
-        )}
-
-        {page === 'cookies-policy' && (
-          <>
-            <div>
-              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400 mb-2">
-                <Cookie className="w-4 h-4" aria-hidden="true" />
-                <span>EU ePrivacy &amp; GDPR</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-                Cookies Policy
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {t('effectiveDate')}
-              </p>
-            </div>
-
-            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  1. How DNS Locator Uses Browser Storage &amp; Cookies
-                </h2>
-                <p>
-                  DNS Locator prioritizes privacy and data minimization. By default, our core DNS diagnostic engine operates without setting invasive tracking cookies. Instead, we rely on strictly necessary local browser storage (<code className="font-mono text-xs">localStorage</code>) to store your theme preference, regional language choice, consent status, and a short-lived 5-minute DNS result cache.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  2. Categories of Storage Keys &amp; Cookies
-                </h2>
-                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 dark:bg-slate-800/70 text-slate-700 dark:text-slate-200">
-                      <tr>
-                        <th className="px-3.5 py-2.5 font-semibold">Key / Category</th>
-                        <th className="px-3.5 py-2.5 font-semibold">Purpose</th>
-                        <th className="px-3.5 py-2.5 font-semibold">Retention</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      <tr>
-                        <td className="px-3.5 py-2.5 font-mono">dnslocator_cookie_consent_v1</td>
-                        <td className="px-3.5 py-2.5">Stores your EU GDPR cookie notice choice (Essential vs Accept).</td>
-                        <td className="px-3.5 py-2.5">Until cleared or reset</td>
-                      </tr>
-                      <tr>
-                        <td className="px-3.5 py-2.5 font-mono">dnslocator_theme / dnslocator_lang</td>
-                        <td className="px-3.5 py-2.5">Remembers Light/Dark mode and regional or English language choice.</td>
-                        <td className="px-3.5 py-2.5">Persistent preference</td>
-                      </tr>
-                      <tr>
-                        <td className="px-3.5 py-2.5 font-mono">dnslocator_cache_v1:* / history</td>
-                        <td className="px-3.5 py-2.5">Caches recent DNS responses locally to prevent redundant queries.</td>
-                        <td className="px-3.5 py-2.5">5 minutes (Cache)</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  3. Third-Party &amp; Advertising Cookies (Google AdSense)
-                </h2>
-                <p>
-                  Should third-party advertising networks (such as Google AdSense) be enabled on DNS Locator, Google and its partners may place cookies to measure ad performance or personalize ads strictly after obtaining valid GDPR consent from EEA/UK visitors.
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  4. Managing or Disabling Cookies
-                </h2>
-                <p>
-                  You can clear DNS Locator&apos;s local cache at any time via the <strong>Clear Cache</strong> button, update your preference on our{' '}
-                  <button
-                    type="button"
-                    onClick={() => onNavigatePage('cookies-notice')}
-                    className="text-sky-700 dark:text-sky-400 underline cursor-pointer"
-                  >
-                    Cookies Notice
-                  </button>{' '}
-                  page, or configure your browser to block or delete cookies.
-                </p>
-              </section>
-            </div>
-          </>
-        )}
-
-        {page === 'cookies-notice' && (
-          <>
-            <div>
-              <div className="inline-flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400 mb-2">
-                <Bell className="w-4 h-4" aria-hidden="true" />
-                <span>GDPR Consent &amp; Transparency</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">
-                Cookies Notice
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {t('effectiveDate')}
-              </p>
-            </div>
-
-            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              <p>
-                Under EU ePrivacy rules and the General Data Protection Regulation (GDPR), DNS Locator informs all visitors before storing or accessing non-essential data on your device. Strictly necessary browser storage required to perform your DNS lookup, enforce fair-use security, and remember your language/theme selection operates under legitimate functional necessity.
-              </p>
-
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      Your Current Cookie &amp; Storage Preference
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      You may update or withdraw your consent at any time (GDPR Art. 7(3)).
-                    </p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
-                    Status:{' '}
-                    {consentChoice === 'all'
-                      ? 'Accepted All'
-                      : consentChoice === 'essential'
-                        ? 'Essential Only'
-                        : 'Not Yet Set'}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateConsent('essential')}
-                    className="h-9 px-3.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    Save Essential Only
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateConsent('all')}
-                    className="h-9 px-4 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    Accept All
-                  </button>
-                  {consentChoice !== null && (
-                    <button
-                      type="button"
-                      onClick={handleResetConsent}
-                      className="h-9 px-3 rounded-lg text-xs font-medium text-rose-700 dark:text-rose-400 hover:underline cursor-pointer"
-                    >
-                      Withdraw Consent &amp; Re-open Banner
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                For full technical tables and legal details, please review our{' '}
-                <button
-                  type="button"
-                  onClick={() => onNavigatePage('cookies-policy')}
-                  className="text-sky-700 dark:text-sky-400 underline cursor-pointer"
-                >
-                  Cookies Policy
-                </button>{' '}
-                and{' '}
-                <button
-                  type="button"
-                  onClick={() => onNavigatePage('privacy')}
-                  className="text-sky-700 dark:text-sky-400 underline cursor-pointer"
-                >
-                  Privacy Policy
-                </button>
-                .
-              </p>
             </div>
           </>
         )}

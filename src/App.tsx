@@ -16,8 +16,9 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
+import AdSlotWrapper from './components/AdSlotWrapper';
 import AllRecordsResults from './components/AllRecordsResults';
-import CookieNoticeBanner from './components/CookieNoticeBanner';
+import CookieNoticeBanner, { getSavedCookieConsent } from './components/CookieNoticeBanner';
 import DnsEducationGuide from './components/DnsEducationGuide';
 import LegalPages, { type LegalPageRoute } from './components/LegalPages';
 import OfflineIndicator from './components/OfflineIndicator';
@@ -25,6 +26,13 @@ import PropagationResults from './components/PropagationResults';
 import PWAInstallButton from './components/PWAInstallButton';
 import { NotFoundTemplate } from './components/StatusTemplates';
 import { usePWAInstall } from './hooks/usePWAInstall';
+import {
+  initAdSenseIfConfigured,
+  initGoogleAnalytics,
+  injectSearchConsoleVerificationTag,
+  trackAnalyticsPageView,
+  trackDnsLookupEvent,
+} from './lib/analytics';
 import {
   addRecentLookup,
   clearAllDnsCache,
@@ -55,8 +63,6 @@ function getRouteFromPath(pathname: string): AppRoute {
   if (clean === '/privacy') return 'privacy';
   if (clean === '/terms') return 'terms';
   if (clean === '/disclaimer') return 'disclaimer';
-  if (clean === '/cookies-policy') return 'cookies-policy';
-  if (clean === '/cookies-notice') return 'cookies-notice';
   return 'not-found';
 }
 
@@ -79,6 +85,7 @@ export default function App() {
   const [view, setView] = useState<WorkspaceView>('overview');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [consentVersion, setConsentVersion] = useState(0);
+  const [isCookiePopupOpen, setIsCookiePopupOpen] = useState(false);
   const [rawInput, setRawInput] = useState('');
   const [recordType, setRecordType] = useState<DnsRecordType>('A');
   const [expectedValue, setExpectedValue] = useState('');
@@ -116,6 +123,13 @@ export default function App() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Initialize Google Search Console verification, GA4 (Consent Mode v2), and AdSense if configured
+  useEffect(() => {
+    injectSearchConsoleVerificationTag();
+    initGoogleAnalytics(getSavedCookieConsent().choice);
+    initAdSenseIfConfigured();
   }, []);
 
   // Sync theme class, localStorage, and theme-color meta tag
@@ -209,11 +223,12 @@ export default function App() {
       privacy: 'Privacy Policy & GDPR – DNS Locator',
       terms: 'Terms and Conditions – DNS Locator',
       disclaimer: 'Disclaimer – DNS Locator',
-      'cookies-policy': 'Cookies Policy – DNS Locator',
-      'cookies-notice': 'Cookies Notice – DNS Locator',
       'not-found': 'Page Not Found – DNS Locator',
     };
     document.title = titles[route];
+    if (route !== 'not-found') {
+      trackAnalyticsPageView(cleanPath, titles[route]);
+    }
   }, [route, propagationData, allRecordsData]);
 
   const navigate = useCallback((nextRoute: AppRoute, hash?: string) => {
@@ -332,6 +347,7 @@ export default function App() {
       }
 
       setInputError(null);
+      trackDnsLookupEvent(activeType);
 
       if (opts?.propagationOnly && allRecordsData?.domain === parsed.domain && !forceRefresh) {
         await fetchPropagation(parsed.domain, activeType, forceRefresh);
@@ -438,7 +454,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100 transition-colors">
       {/* Strict 3-Zone Top Bar Contract */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-[68px] flex items-center justify-between gap-4 sm:gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-[68px] flex items-center justify-between gap-4 sm:gap-6">
           {/* Zone 1: Brand mark & larger wordmark */}
           <a
             href="/"
@@ -520,8 +536,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-7 sm:py-9">
+      {/* Main Content + AdSense-Ready Responsive Shell */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-7 sm:py-9">
         {cacheBanner && (
           <div
             role="status"
@@ -544,15 +560,22 @@ export default function App() {
             onNavigateHome={() => navigate('home')}
             onNavigatePage={(p) => navigate(p)}
           />
-        ) : route !== 'home' ? (
-          <LegalPages
-            page={route}
-            onNavigateHome={() => navigate('home')}
-            onNavigatePage={(p) => navigate(p)}
-            onConsentChanged={() => setConsentVersion((v) => v + 1)}
-          />
         ) : (
           <>
+            {/* Top AdSense Slot Wrapper (empty & buffered from navigation/controls) */}
+            <AdSlotWrapper placement="top" />
+
+            <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8 xl:items-start">
+              <div className="min-w-0">
+                {route !== 'home' ? (
+                  <LegalPages
+                    page={route}
+                    onNavigateHome={() => navigate('home')}
+                    onNavigatePage={(p) => navigate(p)}
+                    onOpenCookiePopup={() => setIsCookiePopupOpen(true)}
+                  />
+                ) : (
+                  <>
             {/* Hero & Workspace Controls */}
             <section aria-labelledby="hero-heading" className="mb-6">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
@@ -1063,13 +1086,25 @@ export default function App() {
 
             {/* Original Educational DNS Guide */}
             <DnsEducationGuide />
+                  </>
+                )}
+              </div>
+
+              {/* Sidebar AdSense Slot Wrapper (sticky on desktop, gracefully below content on mobile) */}
+              <div className="mt-8 xl:mt-0 xl:sticky xl:top-24 shrink-0">
+                <AdSlotWrapper placement="sidebar" />
+              </div>
+            </div>
+
+            {/* Bottom AdSense Slot Wrapper (empty & buffered above footer) */}
+            <AdSlotWrapper placement="bottom" />
           </>
         )}
       </main>
 
-      {/* Compliant Trust Footer with all 7 pages */}
+      {/* Compliant Trust Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400">
           <div className="space-y-1">
             <p className="font-semibold text-slate-700 dark:text-slate-200">
               {t('footerTagline')}
@@ -1117,14 +1152,7 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('cookies-policy')}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
-            >
-              {t('navCookiesPolicy')}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('cookies-notice')}
+              onClick={() => setIsCookiePopupOpen(true)}
               className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
             >
               {t('navCookiesNotice')}
@@ -1146,9 +1174,11 @@ export default function App() {
         </button>
       )}
 
-      {/* EU GDPR Cookie Notice Banner */}
+      {/* EU GDPR Cookie Notice Popup */}
       <CookieNoticeBanner
         consentVersion={consentVersion}
+        forceOpen={isCookiePopupOpen}
+        onCloseForceOpen={() => setIsCookiePopupOpen(false)}
         onNavigatePage={(p) => navigate(p)}
         onConsentSaved={() => setConsentVersion((v) => v + 1)}
       />

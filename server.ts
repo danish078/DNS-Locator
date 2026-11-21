@@ -1052,8 +1052,6 @@ async function startServer() {
         'Allow: /privacy',
         'Allow: /terms',
         'Allow: /disclaimer',
-        'Allow: /cookies-policy',
-        'Allow: /cookies-notice',
         'Disallow: /*?domain=*',
         'Disallow: /*?q=*',
         'Disallow: /api/',
@@ -1075,8 +1073,6 @@ async function startServer() {
       '/privacy',
       '/terms',
       '/disclaimer',
-      '/cookies-policy',
-      '/cookies-notice',
     ];
     const today = new Date().toISOString().split('T')[0];
     const urls = pages
@@ -1412,6 +1408,30 @@ async function startServer() {
 
   const httpServer = http.createServer(app);
 
+  // Optional Google Search Console HTML file verification support
+  const googleVerifyToken = (
+    process.env.GOOGLE_SITE_VERIFICATION ||
+    process.env.VITE_GOOGLE_SITE_VERIFICATION ||
+    ''
+  ).trim();
+  const googleVerifyFile = (process.env.GOOGLE_SITE_VERIFICATION_FILE || '').trim();
+  if (googleVerifyFile && /^google[a-z0-9]+\.html$/i.test(googleVerifyFile)) {
+    app.get(`/${googleVerifyFile}`, (_req: Request, res: Response) => {
+      res.type('text/html').send(`google-site-verification: ${googleVerifyFile}`);
+    });
+  }
+
+  const injectHeadVerification = (html: string): string => {
+    if (!googleVerifyToken || html.includes('name="google-site-verification"')) {
+      return html;
+    }
+    const escaped = googleVerifyToken.replace(/"/g, '&quot;');
+    return html.replace(
+      '</head>',
+      `    <meta name="google-site-verification" content="${escaped}" />\n  </head>`
+    );
+  };
+
   // Vite dev middleware or production static assets
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {
@@ -1426,14 +1446,42 @@ async function startServer() {
       },
       appType: 'spa',
     });
+    if (googleVerifyToken) {
+      app.use(async (req, res, next) => {
+        if (
+          req.method === 'GET' &&
+          !req.path.startsWith('/api/') &&
+          !req.path.includes('.') &&
+          req.headers.accept?.includes('text/html')
+        ) {
+          try {
+            const rawHtml = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
+            const transformed = await vite.transformIndexHtml(
+              req.originalUrl,
+              injectHeadVerification(rawHtml)
+            );
+            res.status(200).set({ 'Content-Type': 'text/html' }).end(transformed);
+            return;
+          } catch (err) {
+            vite.ssrFixStacktrace(err as Error);
+          }
+        }
+        next();
+      });
+    }
     app.use(vite.middlewares);
   } else {
     const distDir = path.resolve(__dirname, 'dist');
-    app.use(express.static(distDir));
+    app.use(express.static(distDir, { index: false }));
     app.get('*', (_req: Request, res: Response) => {
       const indexHtml = path.join(distDir, 'index.html');
       if (fs.existsSync(indexHtml)) {
-        res.sendFile(indexHtml);
+        if (googleVerifyToken) {
+          const raw = fs.readFileSync(indexHtml, 'utf-8');
+          res.type('text/html').send(injectHeadVerification(raw));
+        } else {
+          res.sendFile(indexHtml);
+        }
       } else {
         res.status(404).send('Build output not found. Run npm run build first.');
       }
