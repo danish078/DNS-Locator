@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Cookie, ShieldCheck, X } from 'lucide-react';
+import { Cookie, ShieldCheck } from 'lucide-react';
 import type { LegalPageRoute } from './LegalPages';
 
 export const COOKIE_CONSENT_STORAGE_KEY = 'dnslocator_cookie_consent_v1';
@@ -49,35 +49,23 @@ interface CookieNoticeBannerProps {
   onNavigatePage: (page: LegalPageRoute) => void;
   consentVersion: number;
   onConsentSaved: () => void;
-  /** Re-opens the pop-up (footer "Cookie Settings") even after a choice was saved. */
-  settingsOpen?: boolean;
-  onCloseSettings?: () => void;
 }
 
 export default function CookieNoticeBanner({
   onNavigatePage,
   consentVersion,
   onConsentSaved,
-  settingsOpen = false,
-  onCloseSettings,
 }: CookieNoticeBannerProps) {
   const [dismissedForVersion, setDismissedForVersion] = useState<number | null>(null);
   const saved = getSavedCookieConsent();
 
-  const firstVisit = saved.choice === null && dismissedForVersion !== consentVersion;
-  if (!firstVisit && !settingsOpen) {
+  if (saved.choice !== null || dismissedForVersion === consentVersion) {
     return null;
   }
 
   const handleAccept = (choice: 'all' | 'essential') => {
     saveCookieConsent(choice);
     setDismissedForVersion(consentVersion);
-    onConsentSaved();
-    onCloseSettings?.();
-  };
-
-  const handleWithdraw = () => {
-    clearCookieConsent();
     onConsentSaved();
   };
 
@@ -104,7 +92,15 @@ export default function CookieNoticeBanner({
             >
               Cookies Policy
             </button>
-            {' '}and{' '}
+            ,{' '}
+            <button
+              type="button"
+              onClick={() => onNavigatePage('cookies-notice')}
+              className="text-sky-700 dark:text-sky-400 underline hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
+            >
+              Cookies Notice
+            </button>
+            , and{' '}
             <button
               type="button"
               onClick={() => onNavigatePage('privacy')}
@@ -114,37 +110,10 @@ export default function CookieNoticeBanner({
             </button>
             .
           </p>
-          {saved.choice !== null && (
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              Your current choice:{' '}
-              <strong className="text-slate-900 dark:text-slate-100">
-                {saved.choice === 'all' ? 'Accepted all' : 'Essential only'}
-              </strong>
-            </p>
-          )}
         </div>
-        {settingsOpen && saved.choice !== null && (
-          <button
-            type="button"
-            onClick={onCloseSettings}
-            aria-label="Close cookie settings"
-            className="ml-auto -mt-1 -mr-1 p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer shrink-0"
-          >
-            <X className="w-4 h-4" aria-hidden="true" />
-          </button>
-        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
-        {saved.choice !== null && (
-          <button
-            type="button"
-            onClick={handleWithdraw}
-            className="h-8 px-2 mr-auto text-xs font-medium text-rose-700 dark:text-rose-400 hover:underline cursor-pointer"
-          >
-            Withdraw consent
-          </button>
-        )}
         <button
           type="button"
           onClick={() => handleAccept('essential')}

@@ -16,7 +16,6 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
-import AdLayout from './components/AdLayout';
 import AllRecordsResults from './components/AllRecordsResults';
 import CookieNoticeBanner from './components/CookieNoticeBanner';
 import DnsEducationGuide from './components/DnsEducationGuide';
@@ -57,8 +56,7 @@ function getRouteFromPath(pathname: string): AppRoute {
   if (clean === '/terms') return 'terms';
   if (clean === '/disclaimer') return 'disclaimer';
   if (clean === '/cookies-policy') return 'cookies-policy';
-  // The Cookies Notice page was replaced by the cookie pop-up; old links land on home.
-  if (clean === '/cookies-notice') return 'home';
+  if (clean === '/cookies-notice') return 'cookies-notice';
   return 'not-found';
 }
 
@@ -81,9 +79,6 @@ export default function App() {
   const [view, setView] = useState<WorkspaceView>('overview');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [consentVersion, setConsentVersion] = useState(0);
-  const [cookieSettingsOpen, setCookieSettingsOpen] = useState<boolean>(
-    () => window.location.pathname.replace(/\/+$/, '') === '/cookies-notice'
-  );
   const [rawInput, setRawInput] = useState('');
   const [recordType, setRecordType] = useState<DnsRecordType>('A');
   const [expectedValue, setExpectedValue] = useState('');
@@ -112,14 +107,6 @@ export default function App() {
     () => sanitizeDomainInput(rawInput, recordType),
     [rawInput, recordType]
   );
-
-  // Old /cookies-notice links: show the cookie pop-up and clean the URL
-  useEffect(() => {
-    if (window.location.pathname.replace(/\/+$/, '') === '/cookies-notice') {
-      window.history.replaceState({}, '', '/');
-      setCurrentPath('/');
-    }
-  }, []);
 
   // Track scroll depth to reveal the Move to Top button
   useEffect(() => {
@@ -223,6 +210,7 @@ export default function App() {
       terms: 'Terms and Conditions – DNS Locator',
       disclaimer: 'Disclaimer – DNS Locator',
       'cookies-policy': 'Cookies Policy – DNS Locator',
+      'cookies-notice': 'Cookies Notice – DNS Locator',
       'not-found': 'Page Not Found – DNS Locator',
     };
     document.title = titles[route];
@@ -450,7 +438,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100 transition-colors">
       {/* Strict 3-Zone Top Bar Contract */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-[68px] flex items-center justify-between gap-4 sm:gap-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-[68px] flex items-center justify-between gap-4 sm:gap-6">
           {/* Zone 1: Brand mark & larger wordmark */}
           <a
             href="/"
@@ -533,7 +521,7 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-6xl xl:max-w-7xl w-full mx-auto px-4 sm:px-6 py-7 sm:py-9">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-7 sm:py-9">
         {cacheBanner && (
           <div
             role="status"
@@ -550,7 +538,6 @@ export default function App() {
           </div>
         )}
 
-        <AdLayout showAds={route !== 'not-found'}>
         {route === 'not-found' ? (
           <NotFoundTemplate
             pathname={currentPath}
@@ -562,7 +549,7 @@ export default function App() {
             page={route}
             onNavigateHome={() => navigate('home')}
             onNavigatePage={(p) => navigate(p)}
-            onOpenCookieSettings={() => setCookieSettingsOpen(true)}
+            onConsentChanged={() => setConsentVersion((v) => v + 1)}
           />
         ) : (
           <>
@@ -1078,12 +1065,11 @@ export default function App() {
             <DnsEducationGuide />
           </>
         )}
-        </AdLayout>
       </main>
 
       {/* Compliant Trust Footer with all 7 pages */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 mt-16">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 text-xs text-slate-500 dark:text-slate-400">
           <div className="space-y-1">
             <p className="font-semibold text-slate-700 dark:text-slate-200">
               {t('footerTagline')}
@@ -1138,10 +1124,10 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => setCookieSettingsOpen(true)}
+              onClick={() => navigate('cookies-notice')}
               className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
             >
-              {t('navCookieSettings')}
+              {t('navCookiesNotice')}
             </button>
           </nav>
         </div>
@@ -1163,8 +1149,6 @@ export default function App() {
       {/* EU GDPR Cookie Notice Banner */}
       <CookieNoticeBanner
         consentVersion={consentVersion}
-        settingsOpen={cookieSettingsOpen}
-        onCloseSettings={() => setCookieSettingsOpen(false)}
         onNavigatePage={(p) => navigate(p)}
         onConsentSaved={() => setConsentVersion((v) => v + 1)}
       />

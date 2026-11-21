@@ -801,6 +801,7 @@ export default {
           'Allow: /terms',
           'Allow: /disclaimer',
           'Allow: /cookies-policy',
+          'Allow: /cookies-notice',
           'Disallow: /*?domain=*',
           'Disallow: /*?q=*',
           'Disallow: /api/',
@@ -820,6 +821,7 @@ export default {
         '/terms',
         '/disclaimer',
         '/cookies-policy',
+        '/cookies-notice',
       ];
       const today = new Date().toISOString().split('T')[0];
       const urls = pages
