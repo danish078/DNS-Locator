@@ -9,8 +9,14 @@ declare global {
   }
 }
 
+// DNS Locator's GA4 web stream (https://www.dnslocator.online). Public by design;
+// VITE_GA_MEASUREMENT_ID overrides it when set at build time.
+const DEFAULT_GA_MEASUREMENT_ID = 'G-6T5GYF39F1';
+
 function getMeasurementId(): string | null {
-  const id = (import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined)?.trim();
+  const id =
+    (import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined)?.trim() ||
+    DEFAULT_GA_MEASUREMENT_ID;
   if (!id || !/^G-[A-Z0-9]+$/i.test(id)) return null;
   return id;
 }
