@@ -423,9 +423,9 @@ export default function DomainComparisonSection({
       className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden"
     >
       {/* Header & Controls */}
-      <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="space-y-0.5">
+      <div className="p-5 sm:p-7 border-b border-slate-200 dark:border-slate-800 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
               <GitCompareArrows
                 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0"
@@ -438,7 +438,7 @@ export default function DomainComparisonSection({
                 Side-by-Side Domain Comparison &amp; DNS Diff
               </h2>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               Compare live A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records with automatic green (match) and red (mismatch) zone consistency highlighting.
             </p>
           </div>
@@ -451,21 +451,21 @@ export default function DomainComparisonSection({
                 'cloudflare.com'
               )
             }
-            className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline self-start sm:self-auto whitespace-nowrap shrink-0 cursor-pointer"
+            className="h-9 px-3.5 rounded-lg border border-sky-200 dark:border-sky-800/80 bg-sky-50/70 dark:bg-sky-950/40 hover:bg-sky-100/80 dark:hover:bg-sky-900/50 text-xs font-semibold text-sky-700 dark:text-sky-300 self-start sm:self-auto whitespace-nowrap shrink-0 cursor-pointer transition-colors"
           >
             Try {activeDomain && activeDomain !== 'cloudflare.com' ? activeDomain : 'google.com'} vs cloudflare.com
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
             {/* Domain A Input */}
             <div className="flex-1 min-w-0">
               <label htmlFor="compare-domain-a" className="sr-only">
                 Domain A
               </label>
               <div className="relative" dir="ltr">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-sky-700 dark:text-sky-400 pointer-events-none">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-sky-700 dark:text-sky-400 pointer-events-none">
                   A
                 </span>
                 <input
@@ -480,7 +480,7 @@ export default function DomainComparisonSection({
                   placeholder="First domain (e.g. example.com)"
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full h-10 pl-8 pr-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-900 transition-colors"
+                  className="w-full h-11 pl-9 pr-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-900 transition-colors"
                 />
               </div>
             </div>
@@ -491,9 +491,9 @@ export default function DomainComparisonSection({
               onClick={handleSwap}
               aria-label="Swap Domain A and Domain B"
               title="Swap domains"
-              className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 inline-flex items-center justify-center gap-1.5 text-xs font-medium shrink-0 cursor-pointer transition-colors"
+              className="h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 inline-flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0 cursor-pointer transition-colors"
             >
-              <ArrowLeftRight className="w-3.5 h-3.5" aria-hidden="true" />
+              <ArrowLeftRight className="w-4 h-4" aria-hidden="true" />
               <span className="lg:hidden">Swap</span>
             </button>
 
@@ -503,7 +503,7 @@ export default function DomainComparisonSection({
                 Domain B
               </label>
               <div className="relative" dir="ltr">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-teal-700 dark:text-teal-400 pointer-events-none">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-teal-700 dark:text-teal-400 pointer-events-none">
                   B
                 </span>
                 <input
@@ -515,7 +515,7 @@ export default function DomainComparisonSection({
                   placeholder="Second domain (e.g. cloudflare.com)"
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full h-10 pl-8 pr-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-900 transition-colors"
+                  className="w-full h-11 pl-9 pr-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-900 transition-colors"
                 />
               </div>
             </div>
@@ -530,16 +530,16 @@ export default function DomainComparisonSection({
             <button
               type="submit"
               disabled={isComparing}
-              className="h-10 px-5 rounded-lg bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 disabled:opacity-60 text-white dark:text-slate-950 text-xs sm:text-sm font-semibold shadow-xs shadow-emerald-700/20 dark:shadow-emerald-400/15 inline-flex items-center justify-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer"
+              className="h-11 px-6 rounded-xl bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 disabled:opacity-60 text-white dark:text-slate-950 text-xs sm:text-sm font-semibold shadow-xs shadow-emerald-700/20 dark:shadow-emerald-400/15 inline-flex items-center justify-center gap-2 transition-all whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Search className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <Search className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>{isComparing ? 'Comparing…' : 'Compare DNS'}</span>
             </button>
           </div>
 
           {/* Quick Domain Selectors from Recent Lookups */}
           {recentDomains.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400">
               <span className="font-medium text-slate-600 dark:text-slate-300">
                 Quick fill Domain B:
               </span>
@@ -556,7 +556,7 @@ export default function DomainComparisonSection({
                         runComparison(domainAInput, domain);
                       }
                     }}
-                    className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 hover:border-emerald-500 dark:hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-mono text-[11px] text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                    className="px-3 py-1.5 min-h-[34px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 hover:border-emerald-500 dark:hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-mono text-xs text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                   >
                     {domain}
                   </button>
@@ -568,7 +568,7 @@ export default function DomainComparisonSection({
         {compareError && (
           <div
             role="alert"
-            className="rounded-lg border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/60 px-3.5 py-2.5 text-xs sm:text-sm text-rose-800 dark:text-rose-200 flex items-center gap-2"
+            className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/60 px-4 py-3 text-xs sm:text-sm text-rose-800 dark:text-rose-200 flex items-center gap-2.5"
           >
             <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" aria-hidden="true" />
             <span>{compareError}</span>
@@ -591,22 +591,22 @@ export default function DomainComparisonSection({
       {/* DNS Diff Summary & Audit Toolbar */}
       {!isComparing && zoneA && zoneB && (
         <>
-          <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 space-y-3">
+          <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 space-y-4">
             {/* Top Audit Metrics & View Mode */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs tabular-nums">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm tabular-nums">
                 <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
-                  <FileDiff className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" aria-hidden="true" />
+                  <FileDiff className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" aria-hidden="true" />
                   <span>Zone Consistency: {diffSummary.consistencyPct}%</span>
                 </span>
                 <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
                 <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400" aria-hidden="true" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 dark:bg-emerald-400" aria-hidden="true" />
                   <span>{diffSummary.matching} Matches</span>
                 </span>
                 <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
                 <span className="inline-flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-400">
-                  <span className="w-2 h-2 rounded-full bg-rose-600 dark:bg-rose-400" aria-hidden="true" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-600 dark:bg-rose-400" aria-hidden="true" />
                   <span>{diffSummary.mismatches} Mismatches</span>
                 </span>
                 <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
@@ -616,20 +616,20 @@ export default function DomainComparisonSection({
               </div>
 
               {/* View Switch + Audit TTL + Copy Diff */}
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <div
                   role="tablist"
                   aria-label="DNS comparison layout"
-                  className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800"
+                  className="inline-flex items-center p-1 rounded-xl bg-slate-200/70 dark:bg-slate-800 gap-1"
                 >
                   <button
                     type="button"
                     role="tab"
                     aria-selected={viewMode === 'side-by-side'}
                     onClick={() => setViewMode('side-by-side')}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`px-3.5 py-1.5 min-h-[34px] rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                       viewMode === 'side-by-side'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
@@ -640,9 +640,9 @@ export default function DomainComparisonSection({
                     role="tab"
                     aria-selected={viewMode === 'dns-diff'}
                     onClick={() => setViewMode('dns-diff')}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`px-3.5 py-1.5 min-h-[34px] rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                       viewMode === 'dns-diff'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
@@ -654,7 +654,7 @@ export default function DomainComparisonSection({
                   type="button"
                   onClick={() => setAuditTtl((prev) => !prev)}
                   aria-pressed={auditTtl}
-                  className={`h-7 px-2.5 rounded-md border text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  className={`h-9 px-3.5 rounded-lg border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     auditTtl
                       ? 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300'
                       : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300'
@@ -666,7 +666,7 @@ export default function DomainComparisonSection({
                 <button
                   type="button"
                   onClick={handleCopyDiffAudit}
-                  className="h-7 px-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="h-9 px-3.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   {diffCopied ? (
                     <>
@@ -684,20 +684,20 @@ export default function DomainComparisonSection({
             </div>
 
             {/* Filter Row: All Types | Matches Only | Mismatches Only */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-800/70">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200/70 dark:border-slate-800/70">
               <div
                 role="tablist"
                 aria-label="Filter DNS Diff rows"
-                className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800"
+                className="inline-flex items-center p-1 rounded-xl bg-slate-200/70 dark:bg-slate-800 gap-1"
               >
                 <button
                   type="button"
                   role="tab"
                   aria-selected={diffFilter === 'all'}
                   onClick={() => setDiffFilter('all')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                  className={`px-3.5 py-1.5 min-h-[34px] rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
                     diffFilter === 'all'
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
@@ -708,9 +708,9 @@ export default function DomainComparisonSection({
                   role="tab"
                   aria-selected={diffFilter === 'matches'}
                   onClick={() => setDiffFilter('matches')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                  className={`px-3.5 py-1.5 min-h-[34px] rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
                     diffFilter === 'matches'
-                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      ? 'bg-emerald-600 text-white shadow-xs'
                       : 'text-emerald-700 dark:text-emerald-400 hover:text-emerald-800'
                   }`}
                 >
@@ -721,9 +721,9 @@ export default function DomainComparisonSection({
                   role="tab"
                   aria-selected={diffFilter === 'mismatches'}
                   onClick={() => setDiffFilter('mismatches')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                  className={`px-3.5 py-1.5 min-h-[34px] rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
                     diffFilter === 'mismatches'
-                      ? 'bg-rose-600 text-white shadow-2xs'
+                      ? 'bg-rose-600 text-white shadow-xs'
                       : 'text-rose-700 dark:text-rose-400 hover:text-rose-800'
                   }`}
                 >
@@ -731,13 +731,13 @@ export default function DomainComparisonSection({
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-xs bg-emerald-200 dark:bg-emerald-800 border border-emerald-400 dark:border-emerald-600" aria-hidden="true" />
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                <span className="inline-flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-xs bg-emerald-200 dark:bg-emerald-800 border border-emerald-400 dark:border-emerald-600" aria-hidden="true" />
                   <span>Green = Matching Record</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-xs bg-rose-200 dark:bg-rose-900 border border-rose-400 dark:border-rose-700" aria-hidden="true" />
+                <span className="inline-flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-xs bg-rose-200 dark:bg-rose-900 border border-rose-400 dark:border-rose-700" aria-hidden="true" />
                   <span>Red = Record Mismatch</span>
                 </span>
               </div>
@@ -748,7 +748,7 @@ export default function DomainComparisonSection({
             /* Unified DNS Diff Audit Stream */
             <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {visibleRows.length === 0 ? (
-                <div className="py-10 px-4 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                <div className="py-12 px-5 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                   No DNS record types match the current filter between{' '}
                   <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                     {zoneA.domain}
@@ -763,7 +763,7 @@ export default function DomainComparisonSection({
                 visibleRows.map((row) => (
                   <div
                     key={row.type}
-                    className={`p-4 sm:px-5 space-y-2 ${
+                    className={`p-5 sm:px-6 space-y-3 ${
                       row.isMatch
                         ? 'bg-emerald-50/45 dark:bg-emerald-950/15'
                         : row.isMismatch
@@ -772,7 +772,7 @@ export default function DomainComparisonSection({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-3">
                         <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
                           {row.type}
                         </span>
@@ -781,7 +781,7 @@ export default function DomainComparisonSection({
                           hasTtlMismatch={row.ttlMismatchKeys.size > 0}
                         />
                       </div>
-                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+                      <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
                         A: {row.recordsA.length} · B: {row.recordsB.length}
                       </span>
                     </div>
@@ -791,19 +791,19 @@ export default function DomainComparisonSection({
                         No {row.type} records published on either domain.
                       </div>
                     ) : (
-                      <ul className="space-y-1.5 font-mono text-xs" dir="ltr">
+                      <ul className="space-y-2 font-mono text-xs" dir="ltr">
                         {row.unifiedLines.map((line) => {
                           const isLineMatch = line.status === 'match';
                           return (
                             <li
                               key={line.key}
-                              className={`rounded-md px-2.5 py-1.5 border flex flex-wrap items-center justify-between gap-2 break-all ${
+                              className={`rounded-lg px-3.5 py-2.5 border flex flex-wrap items-center justify-between gap-2.5 break-all ${
                                 isLineMatch
                                   ? 'bg-emerald-100/75 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
                                   : 'bg-rose-100/80 dark:bg-rose-900/35 border-rose-200 dark:border-rose-800/70 text-rose-950 dark:text-rose-100 font-medium'
                               }`}
                             >
-                              <div className="flex items-start gap-2 min-w-0">
+                              <div className="flex items-start gap-2.5 min-w-0">
                                 <span
                                   className={`font-bold shrink-0 ${
                                     isLineMatch
@@ -845,13 +845,13 @@ export default function DomainComparisonSection({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <th className="py-2.5 px-4 whitespace-nowrap w-24">Record</th>
-                    <th className="py-2.5 px-4 whitespace-nowrap w-40">DNS Diff</th>
-                    <th className="py-2.5 px-4 min-w-[240px]" dir="ltr">
+                    <th className="py-3.5 px-5 whitespace-nowrap w-24">Record</th>
+                    <th className="py-3.5 px-5 whitespace-nowrap w-40">DNS Diff</th>
+                    <th className="py-3.5 px-5 min-w-[240px]" dir="ltr">
                       <span className="text-sky-700 dark:text-sky-400 mr-1.5">A:</span>
                       <span className="font-mono text-slate-900 dark:text-slate-100">{zoneA.domain}</span>
                     </th>
-                    <th className="py-2.5 px-4 min-w-[240px]" dir="ltr">
+                    <th className="py-3.5 px-5 min-w-[240px]" dir="ltr">
                       <span className="text-teal-700 dark:text-teal-400 mr-1.5">B:</span>
                       <span className="font-mono text-slate-900 dark:text-slate-100">{zoneB.domain}</span>
                     </th>
@@ -867,13 +867,13 @@ export default function DomainComparisonSection({
                         : 'bg-rose-50/55 dark:bg-rose-950/20'
                     }
                   >
-                    <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap align-top">
+                    <td className="py-4 px-5 font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap align-top">
                       Posture
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="py-4 px-5 align-top">
                       <DiffStatusLabel kind={postureMatches ? 'match' : 'different'} />
                     </td>
-                    <td className="py-3 px-4 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                    <td className="py-4 px-5 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
                       <div className="inline-flex items-center gap-1.5 font-medium">
                         <ShieldCheck
                           className={`w-3.5 h-3.5 ${
@@ -891,7 +891,7 @@ export default function DomainComparisonSection({
                         {zoneA.emailHealth.hasDmarc ? 'OK' : 'Missing'}
                       </div>
                     </td>
-                    <td className="py-3 px-4 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                    <td className="py-4 px-5 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
                       <div className="inline-flex items-center gap-1.5 font-medium">
                         <ShieldCheck
                           className={`w-3.5 h-3.5 ${
@@ -915,7 +915,7 @@ export default function DomainComparisonSection({
                     <tr>
                       <td
                         colSpan={4}
-                        className="py-8 px-4 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400"
+                        className="py-10 px-5 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400"
                       >
                         No DNS record types match the current filter between{' '}
                         <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
@@ -938,16 +938,16 @@ export default function DomainComparisonSection({
 
                       return (
                         <tr key={row.type} className={rowBg}>
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap align-top">
+                          <td className="py-4 px-5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap align-top">
                             {row.type}
                           </td>
-                          <td className="py-3 px-4 align-top">
+                          <td className="py-4 px-5 align-top">
                             <DiffStatusLabel
                               kind={row.diffKind}
                               hasTtlMismatch={row.ttlMismatchKeys.size > 0}
                             />
                           </td>
-                          <td className="py-3 px-4 align-top" dir="ltr">
+                          <td className="py-4 px-5 align-top" dir="ltr">
                             {row.recordsA.length === 0 ? (
                               <span
                                 className={`text-xs ${
@@ -961,7 +961,7 @@ export default function DomainComparisonSection({
                                   : `No ${row.type} record published`}
                               </span>
                             ) : (
-                              <ul className="space-y-1.5 font-mono text-xs">
+                              <ul className="space-y-2 font-mono text-xs">
                                 {row.recordsA.map((item, idx) => {
                                   const key = recordComparableKey(item);
                                   const isLineMismatch =
@@ -969,7 +969,7 @@ export default function DomainComparisonSection({
                                   return (
                                     <li
                                       key={`${idx}-${item.data}`}
-                                      className={`rounded-md px-2 py-1 border break-all flex items-start justify-between gap-2 ${
+                                      className={`rounded-lg px-3 py-2 border break-all flex items-start justify-between gap-2.5 ${
                                         isLineMismatch
                                           ? 'bg-rose-100/85 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800/70 text-rose-950 dark:text-rose-100 font-medium'
                                           : 'bg-emerald-100/75 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
@@ -985,7 +985,7 @@ export default function DomainComparisonSection({
                               </ul>
                             )}
                           </td>
-                          <td className="py-3 px-4 align-top" dir="ltr">
+                          <td className="py-4 px-5 align-top" dir="ltr">
                             {row.recordsB.length === 0 ? (
                               <span
                                 className={`text-xs ${
@@ -999,7 +999,7 @@ export default function DomainComparisonSection({
                                   : `No ${row.type} record published`}
                               </span>
                             ) : (
-                              <ul className="space-y-1.5 font-mono text-xs">
+                              <ul className="space-y-2 font-mono text-xs">
                                 {row.recordsB.map((item, idx) => {
                                   const key = recordComparableKey(item);
                                   const isLineMismatch =
@@ -1007,7 +1007,7 @@ export default function DomainComparisonSection({
                                   return (
                                     <li
                                       key={`${idx}-${item.data}`}
-                                      className={`rounded-md px-2 py-1 border break-all flex items-start justify-between gap-2 ${
+                                      className={`rounded-lg px-3 py-2 border break-all flex items-start justify-between gap-2.5 ${
                                         isLineMismatch
                                           ? 'bg-rose-100/85 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800/70 text-rose-950 dark:text-rose-100 font-medium'
                                           : 'bg-emerald-100/75 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
