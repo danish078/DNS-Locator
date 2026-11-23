@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { Activity, BarChart3, CheckCircle2, Clock } from 'lucide-react';
+import { Activity, BarChart3, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
 import type { RegionalCheckpointResult } from '../types/dns';
 
 interface GlobalHealthChartProps {
@@ -10,14 +10,27 @@ interface GlobalHealthChartProps {
   onSelectRegion: (id: string | null) => void;
 }
 
-type ChartMode = 'regions' | 'continents';
+type ChartMode = 'regions' | 'histogram' | 'continents';
 type RegionHealthCategory = 'propagated' | 'variance' | 'failed';
+type TierFilter = 'all' | 'fast' | 'moderate' | 'slow';
+type SlaTargetMs = 50 | 100 | 150 | 250;
 
 interface StatusSlice {
   key: RegionHealthCategory;
   label: string;
   count: number;
   color: string;
+}
+
+interface HistogramBucket {
+  id: string;
+  label: string;
+  minMs: number;
+  maxMs: number;
+  count: number;
+  pct: number;
+  cities: string[];
+  tier: 'fast' | 'moderate' | 'slow';
 }
 
 interface TooltipInfo {
@@ -47,6 +60,12 @@ function classifyRegion(
   return region.matchesConsensus ? 'propagated' : 'variance';
 }
 
+function classifyLatencyTier(ms: number): 'fast' | 'moderate' | 'slow' {
+  if (ms < 50) return 'fast';
+  if (ms <= 150) return 'moderate';
+  return 'slow';
+}
+
 function useDarkModeObserver(): boolean {
   const [isDark, setIsDark] = useState<boolean>(() =>
     typeof document !== 'undefined'
@@ -73,6 +92,8 @@ export default function GlobalHealthChart({
   onSelectRegion,
 }: GlobalHealthChartProps) {
   const [chartMode, setChartMode] = useState<ChartMode>('regions');
+  const [tierFilter, setTierFilter] = useState<TierFilter>('all');
+  const [slaTargetMs, setSlaTargetMs] = useState<SlaTargetMs>(100);
   const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
   const [barContainerWidth, setBarContainerWidth] = useState<number>(640);
 
@@ -98,20 +119,30 @@ export default function GlobalHealthChart({
     const classified = regions.map((r) => ({
       region: r,
       category: classifyRegion(r, expectedValue),
+      tier: classifyLatencyTier(r.latencyMs),
     }));
 
     const propagatedCount = classified.filter((c) => c.category === 'propagated').length;
     const varianceCount = classified.filter((c) => c.category === 'variance').length;
     const failedCount = classified.filter((c) => c.category === 'failed').length;
 
+    const fastCount = classified.filter((c) => c.tier === 'fast').length;
+    const moderateCount = classified.filter((c) => c.tier === 'moderate').length;
+    const slowCount = classified.filter((c) => c.tier === 'slow').length;
+
     const latencies = regions.map((r) => r.latencyMs).filter((ms) => Number.isFinite(ms));
     const sortedLatencies = [...latencies].sort((a, b) => a - b);
 
     const avgLatency = Math.round(d3.mean(latencies) ?? 0);
+    const p50Latency = Math.round(d3.quantile(sortedLatencies, 0.5) ?? 0);
     const p95Latency = Math.round(d3.quantile(sortedLatencies, 0.95) ?? 0);
     const fastestNode = [...regions].sort((a, b) => a.latencyMs - b.latencyMs)[0] ?? null;
     const healthPercent =
       regions.length > 0 ? Math.round((propagatedCount / regions.length) * 100) : 0;
+
+    const slaPassCount = classified.filter((c) => c.region.latencyMs <= slaTargetMs).length;
+    const slaCompliancePct =
+      regions.length > 0 ? Math.round((slaPassCount / regions.length) * 100) : 0;
 
     const slices: StatusSlice[] = [
       {
@@ -136,9 +167,45 @@ export default function GlobalHealthChart({
 
     const sortedRegions = [...classified].sort((a, b) => a.region.latencyMs - b.region.latencyMs);
 
+    const bucketDefs: Array<{
+      id: string;
+      label: string;
+      minMs: number;
+      maxMs: number;
+      tier: 'fast' | 'moderate' | 'slow';
+    }> = [
+      { id: 'b-0-50', label: '<50ms', minMs: 0, maxMs: 50, tier: 'fast' },
+      { id: 'b-50-100', label: '50–100ms', minMs: 50, maxMs: 100, tier: 'moderate' },
+      { id: 'b-100-150', label: '100–150ms', minMs: 100, maxMs: 150, tier: 'moderate' },
+      { id: 'b-150-250', label: '150–250ms', minMs: 150, maxMs: 250, tier: 'slow' },
+      { id: 'b-250-plus', label: '>250ms', minMs: 250, maxMs: Infinity, tier: 'slow' },
+    ];
+
+    const histogramBuckets: HistogramBucket[] = bucketDefs.map((b) => {
+      const members = sortedRegions.filter((item) => {
+        const ms = item.region.latencyMs;
+        if (b.maxMs === Infinity) return ms > 250;
+        if (b.minMs === 0) return ms < 50;
+        return ms >= b.minMs && ms <= b.maxMs;
+      });
+      return {
+        id: b.id,
+        label: b.label,
+        minMs: b.minMs,
+        maxMs: b.maxMs,
+        count: members.length,
+        pct: regions.length > 0 ? Math.round((members.length / regions.length) * 100) : 0,
+        cities: members.map((m) => `${m.region.city} (${m.region.latencyMs}ms)`),
+        tier: b.tier,
+      };
+    });
+
+    const filteredSource =
+      tierFilter === 'all' ? classified : classified.filter((c) => c.tier === tierFilter);
+
     const continentRollup = Array.from(
       d3.rollup(
-        classified,
+        filteredSource,
         (items) => {
           const avgMs = Math.round(d3.mean(items, (i) => i.region.latencyMs) ?? 0);
           const okCount = items.filter((i) => i.category === 'propagated').length;
@@ -160,14 +227,21 @@ export default function GlobalHealthChart({
       propagatedCount,
       varianceCount,
       failedCount,
+      fastCount,
+      moderateCount,
+      slowCount,
       avgLatency,
+      p50Latency,
       p95Latency,
       fastestNode,
       healthPercent,
+      slaPassCount,
+      slaCompliancePct,
       sortedRegions,
+      histogramBuckets,
       continentRollup,
     };
-  }, [regions, expectedValue, isDark]);
+  }, [regions, expectedValue, isDark, slaTargetMs, tierFilter]);
 
   // Render D3 Donut Chart for Propagation Status Distribution
   useEffect(() => {
@@ -227,17 +301,17 @@ export default function GlobalHealthChart({
       .text(`${stats.propagatedCount}/${regions.length} healthy`);
   }, [regions.length, stats, isDark]);
 
-  // Render D3 Latency & Health Bar Chart
+  // Render D3 Latency & Distribution Charts
   useEffect(() => {
     const svgEl = barSvgRef.current;
     if (!svgEl || regions.length === 0) return;
 
-    const height = chartMode === 'regions' ? 248 : 228;
+    const height = chartMode === 'regions' ? 256 : 234;
     const width = Math.max(320, barContainerWidth);
     const margin = {
-      top: 18,
-      right: 16,
-      bottom: chartMode === 'regions' ? 58 : 44,
+      top: 22,
+      right: 20,
+      bottom: chartMode === 'regions' ? 58 : 42,
       left: 46,
     };
     const innerWidth = Math.max(120, width - margin.left - margin.right);
@@ -253,6 +327,12 @@ export default function GlobalHealthChart({
       return isDark ? '#F87171' : '#DC2626';
     };
 
+    const tierColor = (tier: 'fast' | 'moderate' | 'slow') => {
+      if (tier === 'fast') return isDark ? '#22C55E' : '#16A34A';
+      if (tier === 'moderate') return isDark ? '#FACC15' : '#CA8A04';
+      return isDark ? '#F87171' : '#DC2626';
+    };
+
     const svg = d3.select(svgEl);
     svg.selectAll('*').remove();
     svg.attr('viewBox', `0 0 ${width} ${height}`);
@@ -261,9 +341,78 @@ export default function GlobalHealthChart({
       .append('g')
       .attr('transform', `translate(${margin.left}, ${margin.top})`);
 
+    const drawReferenceLines = (yScale: d3.ScaleLinear<number, number>) => {
+      const refs: Array<{
+        label: string;
+        value: number;
+        color: string;
+        dash: string;
+        align: 'start' | 'end';
+      }> = [
+        {
+          label: `P50 ${stats.p50Latency}ms`,
+          value: stats.p50Latency,
+          color: isDark ? '#818CF8' : '#4F46E5',
+          dash: '3 3',
+          align: 'start',
+        },
+        {
+          label: `P95 ${stats.p95Latency}ms`,
+          value: stats.p95Latency,
+          color: isDark ? '#FB923C' : '#D97706',
+          dash: '5 3',
+          align: 'end',
+        },
+        {
+          label: `SLA ${slaTargetMs}ms`,
+          value: slaTargetMs,
+          color: isDark ? '#34D399' : '#059669',
+          dash: '6 3',
+          align: 'end',
+        },
+      ];
+
+      const placedEndYs: number[] = [];
+      for (const ref of refs) {
+        const rawY = yScale(ref.value);
+        if (rawY < 0 || rawY > innerHeight) continue;
+
+        g.append('line')
+          .attr('x1', 0)
+          .attr('x2', innerWidth)
+          .attr('y1', rawY)
+          .attr('y2', rawY)
+          .attr('stroke', ref.color)
+          .attr('stroke-width', 1.25)
+          .attr('stroke-dasharray', ref.dash)
+          .attr('opacity', 0.9);
+
+        let labelY = Math.max(10, rawY - 4);
+        if (ref.align === 'end') {
+          for (const prevY of placedEndYs) {
+            if (Math.abs(labelY - prevY) < 12) {
+              labelY = prevY - 12;
+            }
+          }
+          placedEndYs.push(labelY);
+        }
+
+        g.append('text')
+          .attr('x', ref.align === 'start' ? 4 : innerWidth - 4)
+          .attr('y', Math.max(8, labelY))
+          .attr('text-anchor', ref.align)
+          .attr('fill', ref.color)
+          .style('font-size', '10px')
+          .style('font-weight', '600')
+          .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
+          .text(ref.label);
+      }
+    };
+
     if (chartMode === 'regions') {
       const items = stats.sortedRegions;
-      const maxMs = Math.max(100, (d3.max(items, (d) => d.region.latencyMs) ?? 100) * 1.12);
+      const maxBarMs = d3.max(items, (d) => d.region.latencyMs) ?? 100;
+      const maxMs = Math.max(slaTargetMs + 25, stats.p95Latency + 20, maxBarMs * 1.14, 100);
 
       const xScale = d3
         .scaleBand<string>()
@@ -277,7 +426,6 @@ export default function GlobalHealthChart({
         .nice()
         .range([innerHeight, 0]);
 
-      // Horizontal gridlines
       g.append('g')
         .call(
           d3
@@ -294,7 +442,6 @@ export default function GlobalHealthChart({
             .attr('stroke-dasharray', '2 3')
         );
 
-      // Y axis
       g.append('g')
         .call(
           d3
@@ -311,7 +458,6 @@ export default function GlobalHealthChart({
             .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
         );
 
-      // X axis with short city labels
       const labelById = new Map(items.map((d) => [d.region.id, d.region.city]));
       g.append('g')
         .attr('transform', `translate(0, ${innerHeight})`)
@@ -334,30 +480,12 @@ export default function GlobalHealthChart({
             .attr('transform', 'rotate(-34)')
         );
 
-      // Average latency reference line
-      if (stats.avgLatency > 0) {
-        const avgY = yScale(stats.avgLatency);
-        g.append('line')
-          .attr('x1', 0)
-          .attr('x2', innerWidth)
-          .attr('y1', avgY)
-          .attr('y2', avgY)
-          .attr('stroke', isDark ? '#38BDF8' : '#0284C7')
-          .attr('stroke-width', 1.25)
-          .attr('stroke-dasharray', '4 3');
+      const barOpacity = (d: (typeof items)[number]) => {
+        if (selectedRegionId && selectedRegionId !== d.region.id) return 0.35;
+        if (tierFilter !== 'all' && d.tier !== tierFilter) return 0.22;
+        return 0.92;
+      };
 
-        g.append('text')
-          .attr('x', innerWidth - 4)
-          .attr('y', Math.max(10, avgY - 5))
-          .attr('text-anchor', 'end')
-          .attr('fill', isDark ? '#38BDF8' : '#0284C7')
-          .style('font-size', '10px')
-          .style('font-weight', '600')
-          .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
-          .text(`Avg ${stats.avgLatency} ms`);
-      }
-
-      // Bars for all 18 checkpoints
       g.selectAll('rect.region-bar')
         .data(items)
         .join('rect')
@@ -368,9 +496,7 @@ export default function GlobalHealthChart({
         .attr('height', (d) => Math.max(2, innerHeight - yScale(d.region.latencyMs)))
         .attr('rx', 3)
         .attr('fill', (d) => categoryColor(d.category))
-        .attr('opacity', (d) =>
-          selectedRegionId && selectedRegionId !== d.region.id ? 0.45 : 0.92
-        )
+        .attr('opacity', barOpacity)
         .attr('stroke', (d) =>
           selectedRegionId === d.region.id ? highlightStroke : 'none'
         )
@@ -380,35 +506,149 @@ export default function GlobalHealthChart({
           d3.select(this).attr('opacity', 1);
           const barX = (xScale(d.region.id) ?? 0) + xScale.bandwidth() / 2 + margin.left;
           const barY = yScale(d.region.latencyMs) + margin.top;
-          const statusLabel =
-            d.category === 'propagated'
-              ? 'Propagated'
-              : d.category === 'variance'
-                ? 'Variance / Mismatch'
-                : 'Unresolved';
+          const slaOk = d.region.latencyMs <= slaTargetMs;
           setTooltip({
             x: barX,
             y: barY,
             title: `${d.region.city}, ${d.region.countryCode}`,
-            subtitle: `${d.region.provider} · ${d.region.continent}`,
+            subtitle: `${d.region.provider} · ${slaOk ? `Within ${slaTargetMs}ms SLA` : `Exceeds ${slaTargetMs}ms SLA`}`,
             metric: `${d.region.latencyMs} ms`,
-            statusLabel,
+            statusLabel:
+              d.category === 'propagated'
+                ? 'Propagated'
+                : d.category === 'variance'
+                  ? 'Variance / Mismatch'
+                  : 'Unresolved',
             statusColor: categoryColor(d.category),
           });
         })
         .on('mouseleave', function (_event, d) {
-          d3.select(this).attr(
-            'opacity',
-            selectedRegionId && selectedRegionId !== d.region.id ? 0.45 : 0.92
-          );
+          d3.select(this).attr('opacity', barOpacity(d));
           setTooltip(null);
         })
         .on('click', (_event, d) => {
           onSelectRegion(selectedRegionId === d.region.id ? null : d.region.id);
         });
+
+      drawReferenceLines(yScale);
+    } else if (chartMode === 'histogram') {
+      const buckets = stats.histogramBuckets;
+      const maxCount = Math.max(4, (d3.max(buckets, (b) => b.count) ?? 4) + 1);
+
+      const xScale = d3
+        .scaleBand<string>()
+        .domain(buckets.map((b) => b.label))
+        .range([0, innerWidth])
+        .padding(0.28);
+
+      const yScale = d3
+        .scaleLinear()
+        .domain([0, maxCount])
+        .nice()
+        .range([innerHeight, 0]);
+
+      g.append('g')
+        .call(
+          d3
+            .axisLeft(yScale)
+            .ticks(4)
+            .tickSize(-innerWidth)
+            .tickFormat(() => '')
+        )
+        .call((axisG) => axisG.select('.domain').remove())
+        .call((axisG) =>
+          axisG
+            .selectAll('line')
+            .attr('stroke', gridColor)
+            .attr('stroke-dasharray', '2 3')
+        );
+
+      g.append('g')
+        .call(
+          d3
+            .axisLeft(yScale)
+            .ticks(4)
+            .tickFormat((d) => `${d}`)
+        )
+        .call((axisG) => axisG.select('.domain').remove())
+        .call((axisG) =>
+          axisG
+            .selectAll('text')
+            .attr('fill', axisTextColor)
+            .style('font-size', '10px')
+            .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
+        );
+
+      g.append('g')
+        .attr('transform', `translate(0, ${innerHeight})`)
+        .call(d3.axisBottom(xScale))
+        .call((axisG) => axisG.select('.domain').attr('stroke', gridColor))
+        .call((axisG) => axisG.selectAll('.tick line').remove())
+        .call((axisG) =>
+          axisG
+            .selectAll('text')
+            .attr('fill', axisTextColor)
+            .style('font-size', '10px')
+            .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
+        );
+
+      const bucketOpacity = (b: HistogramBucket) => {
+        if (tierFilter !== 'all' && b.tier !== tierFilter) return 0.25;
+        return 0.92;
+      };
+
+      g.selectAll('rect.hist-bar')
+        .data(buckets)
+        .join('rect')
+        .attr('class', 'hist-bar')
+        .attr('x', (b) => xScale(b.label) ?? 0)
+        .attr('y', (b) => yScale(b.count))
+        .attr('width', xScale.bandwidth())
+        .attr('height', (b) => Math.max(b.count > 0 ? 4 : 0, innerHeight - yScale(b.count)))
+        .attr('rx', 4)
+        .attr('fill', (b) => tierColor(b.tier))
+        .attr('opacity', bucketOpacity)
+        .on('mouseenter', function (_event, b) {
+          d3.select(this).attr('opacity', 1);
+          const barX = (xScale(b.label) ?? 0) + xScale.bandwidth() / 2 + margin.left;
+          const barY = yScale(b.count) + margin.top;
+          setTooltip({
+            x: barX,
+            y: barY,
+            title: `Latency Band: ${b.label}`,
+            subtitle:
+              b.cities.length > 0
+                ? b.cities.slice(0, 3).join(', ') + (b.cities.length > 3 ? ` +${b.cities.length - 3}` : '')
+                : 'No checkpoints in this band',
+            metric: `${b.count} region${b.count === 1 ? '' : 's'}`,
+            statusLabel: `${b.pct}% of network`,
+            statusColor: tierColor(b.tier),
+          });
+        })
+        .on('mouseleave', function (_event, b) {
+          d3.select(this).attr('opacity', bucketOpacity(b));
+          setTooltip(null);
+        });
+
+      g.selectAll('text.hist-val')
+        .data(buckets)
+        .join('text')
+        .attr('class', 'hist-val')
+        .attr('x', (b) => (xScale(b.label) ?? 0) + xScale.bandwidth() / 2)
+        .attr('y', (b) => yScale(b.count) - 6)
+        .attr('text-anchor', 'middle')
+        .attr('fill', axisTextColor)
+        .style('font-size', '10px')
+        .style('font-weight', '600')
+        .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
+        .text((b) => `${b.count} (${b.pct}%)`);
     } else {
       const items = stats.continentRollup;
-      const maxMs = Math.max(100, (d3.max(items, (d) => d.avgMs) ?? 100) * 1.15);
+      const maxMs = Math.max(
+        slaTargetMs + 25,
+        (d3.max(items, (d) => d.avgMs) ?? 100) * 1.15,
+        100
+      );
 
       const xScale = d3
         .scaleBand<string>()
@@ -500,7 +740,10 @@ export default function GlobalHealthChart({
             title: d.continent,
             subtitle: `${d.okCount}/${d.totalCount} checkpoints healthy`,
             metric: `${d.avgMs} ms avg`,
-            statusLabel: d.healthRatio === 1 ? '100% Propagated' : `${Math.round(d.healthRatio * 100)}% Healthy`,
+            statusLabel:
+              d.healthRatio === 1
+                ? '100% Propagated'
+                : `${Math.round(d.healthRatio * 100)}% Healthy`,
             statusColor: fillForContinent(d.healthRatio),
           });
         })
@@ -521,8 +764,40 @@ export default function GlobalHealthChart({
         .style('font-weight', '600')
         .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
         .text((d) => `${d.okCount}/${d.totalCount} · ${d.avgMs}ms`);
+
+      const slaY = yScale(slaTargetMs);
+      if (slaY >= 0 && slaY <= innerHeight) {
+        const slaColor = isDark ? '#34D399' : '#059669';
+        g.append('line')
+          .attr('x1', 0)
+          .attr('x2', innerWidth)
+          .attr('y1', slaY)
+          .attr('y2', slaY)
+          .attr('stroke', slaColor)
+          .attr('stroke-width', 1.25)
+          .attr('stroke-dasharray', '6 3');
+        g.append('text')
+          .attr('x', innerWidth - 4)
+          .attr('y', Math.max(9, slaY - 4))
+          .attr('text-anchor', 'end')
+          .attr('fill', slaColor)
+          .style('font-size', '10px')
+          .style('font-weight', '600')
+          .style('font-family', 'ui-monospace, SFMono-Regular, Menlo, monospace')
+          .text(`SLA ${slaTargetMs}ms`);
+      }
     }
-  }, [regions.length, chartMode, barContainerWidth, stats, selectedRegionId, isDark, onSelectRegion]);
+  }, [
+    regions.length,
+    chartMode,
+    tierFilter,
+    slaTargetMs,
+    barContainerWidth,
+    stats,
+    selectedRegionId,
+    isDark,
+    onSelectRegion,
+  ]);
 
   if (regions.length === 0) return null;
 
@@ -532,7 +807,7 @@ export default function GlobalHealthChart({
       dir="ltr"
       className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden"
     >
-      {/* Header Strip + KPI Metrics */}
+      {/* Header Strip + KPI Metrics (with P50, P95 & SLA Compliance) */}
       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" aria-hidden="true" />
@@ -544,7 +819,7 @@ export default function GlobalHealthChart({
           </h3>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600 dark:text-slate-300 tabular-nums">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600 dark:text-slate-300 tabular-nums">
           <span className="inline-flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             <span>
@@ -558,16 +833,20 @@ export default function GlobalHealthChart({
             </span>
           </span>
           <span>
-            P95: <strong className="font-mono text-slate-900 dark:text-slate-100">{stats.p95Latency} ms</strong>
+            P50: <strong className="font-mono text-indigo-700 dark:text-indigo-400">{stats.p50Latency} ms</strong>
           </span>
-          {stats.fastestNode && (
+          <span>
+            P95: <strong className="font-mono text-amber-700 dark:text-amber-400">{stats.p95Latency} ms</strong>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             <span>
-              Fastest:{' '}
-              <strong className="font-mono text-slate-900 dark:text-slate-100">
-                {stats.fastestNode.city} ({stats.fastestNode.latencyMs} ms)
+              SLA ({slaTargetMs}ms):{' '}
+              <strong className="font-mono text-emerald-700 dark:text-emerald-400">
+                {stats.slaPassCount}/{regions.length} ({stats.slaCompliancePct}%)
               </strong>
             </span>
-          )}
+          </span>
         </div>
       </div>
 
@@ -606,49 +885,100 @@ export default function GlobalHealthChart({
           </div>
         </div>
 
-        {/* Right: D3 Latency Distribution Bar Chart */}
+        {/* Right: D3 Latency Distribution, Histogram & SLA Filter Controls */}
         <div className="lg:col-span-8 min-w-0 space-y-3">
+          {/* Top Bar: Chart Description + View Grouping Tabs */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
               <BarChart3 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" aria-hidden="true" />
               <span>
                 {chartMode === 'regions'
-                  ? 'Resolver Query Latency (Click a bar to highlight region)'
-                  : 'Average Latency & Health by Continent'}
+                  ? 'Resolver Query Latency (P50 / P95 / SLA lines)'
+                  : chartMode === 'histogram'
+                    ? 'Latency Distribution Histogram (5 Bands)'
+                    : 'Average Latency & Health by Continent'}
               </span>
             </div>
 
             <div
               role="tablist"
               aria-label="Latency chart grouping"
-              className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/70"
+              className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/70 overflow-x-auto max-w-full"
             >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={chartMode === 'regions'}
-                onClick={() => setChartMode('regions')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                  chartMode === 'regions'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                18 Regions
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={chartMode === 'continents'}
-                onClick={() => setChartMode('continents')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                  chartMode === 'continents'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                By Continent
-              </button>
+              {(
+                [
+                  { id: 'regions', label: '18 Regions' },
+                  { id: 'histogram', label: 'Histogram' },
+                  { id: 'continents', label: 'By Continent' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={chartMode === tab.id}
+                  onClick={() => setChartMode(tab.id)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    chartMode === tab.id
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Interactive SLA Filter & Target Threshold Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-slate-500 dark:text-slate-400 font-medium mr-1">
+                Tier Filter:
+              </span>
+              {(
+                [
+                  { id: 'all', label: `All (${regions.length})` },
+                  { id: 'fast', label: `<50ms (${stats.fastCount})` },
+                  { id: 'moderate', label: `50–150ms (${stats.moderateCount})` },
+                  { id: 'slow', label: `>150ms (${stats.slowCount})` },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setTierFilter(opt.id)}
+                  aria-pressed={tierFilter === opt.id}
+                  className={`px-2 py-0.5 rounded-md border font-mono font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    tierFilter === opt.id
+                      ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500 dark:text-slate-400 font-medium mr-1">
+                SLA Target:
+              </span>
+              {([50, 100, 150, 250] as const).map((ms) => (
+                <button
+                  key={ms}
+                  type="button"
+                  onClick={() => setSlaTargetMs(ms)}
+                  aria-pressed={slaTargetMs === ms}
+                  className={`px-2 py-0.5 rounded-md border font-mono font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    slaTargetMs === ms
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  {ms}ms
+                </button>
+              ))}
             </div>
           </div>
 
@@ -657,21 +987,21 @@ export default function GlobalHealthChart({
               ref={barSvgRef}
               className="w-full block overflow-visible"
               role="img"
-              aria-label="D3 bar chart plotting query latency and propagation status across global DNS regions"
+              aria-label="D3 chart plotting query latency, histogram buckets, percentiles, and SLA thresholds across global DNS regions"
             />
 
             {tooltip && (
               <div
-                className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full -mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-lg backdrop-blur-xs text-xs whitespace-nowrap"
+                className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full -mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-lg text-xs whitespace-nowrap"
                 style={{
-                  left: `${Math.min(Math.max(tooltip.x, 80), Math.max(80, barContainerWidth - 80))}px`,
+                  left: `${Math.min(Math.max(tooltip.x, 90), Math.max(90, barContainerWidth - 90))}px`,
                   top: `${Math.max(tooltip.y, 44)}px`,
                 }}
               >
                 <div className="font-semibold text-slate-900 dark:text-slate-100">
                   {tooltip.title}
                 </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 max-w-[240px] truncate">
                   {tooltip.subtitle}
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-3 font-mono text-[11px]">

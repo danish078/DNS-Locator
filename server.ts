@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
+import { generateAiGameDebrief, generateAiGameMission } from './server/gemini';
 
 dotenv.config();
 
@@ -1410,6 +1411,88 @@ async function startServer() {
       subject: typeof subject === 'string' && subject.trim() ? subject.trim() : 'General Inquiry',
       receivedAt: new Date().toISOString(),
     });
+  });
+
+  // Server-side Gemini AI Game Mission Generator
+  app.post('/api/game/ai-mission', async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const rate = dnsRateLimiter.check(ip);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: `Rate limit exceeded. Please wait ${rate.retryAfterSeconds}s before requesting another AI mission.`,
+      });
+    }
+
+    try {
+      const { domain, difficulty, previousScore } = req.body ?? {};
+      const validDifficulty =
+        difficulty === 'chill' || difficulty === 'standard' || difficulty === 'turbo'
+          ? difficulty
+          : 'standard';
+      const mission = await generateAiGameMission({
+        domain: typeof domain === 'string' ? domain.slice(0, 120) : undefined,
+        difficulty: validDifficulty,
+        previousScore: typeof previousScore === 'number' ? previousScore : 0,
+      });
+      return res.json({ mission });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unable to generate AI mission via Gemini.';
+      const status = message.includes('GEMINI_API_KEY') ? 503 : 502;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  // Server-side Gemini AI Run Debrief Coach
+  app.post('/api/game/ai-debrief', async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const rate = dnsRateLimiter.check(ip);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: `Rate limit exceeded. Please wait ${rate.retryAfterSeconds}s before requesting another AI debrief.`,
+      });
+    }
+
+    try {
+      const {
+        score,
+        bestScore,
+        dodgedCount,
+        orbsCollected,
+        maxCombo,
+        crashCause,
+        speedMultiplier,
+        activeDomain,
+        missionTitle,
+      } = req.body ?? {};
+
+      const validCrash =
+        crashCause === 'nxdomain' || crashCause === 'timeout' || crashCause === 'none'
+          ? crashCause
+          : 'nxdomain';
+
+      const debrief = await generateAiGameDebrief({
+        score: typeof score === 'number' ? Math.max(0, Math.floor(score)) : 0,
+        bestScore: typeof bestScore === 'number' ? Math.max(0, Math.floor(bestScore)) : 0,
+        dodgedCount: typeof dodgedCount === 'number' ? Math.max(0, Math.floor(dodgedCount)) : 0,
+        orbsCollected:
+          typeof orbsCollected === 'number' ? Math.max(0, Math.floor(orbsCollected)) : 0,
+        maxCombo: typeof maxCombo === 'number' ? Math.max(1, Math.floor(maxCombo)) : 1,
+        crashCause: validCrash,
+        speedMultiplier:
+          typeof speedMultiplier === 'number' && Number.isFinite(speedMultiplier)
+            ? speedMultiplier
+            : 1,
+        activeDomain: typeof activeDomain === 'string' ? activeDomain.slice(0, 120) : undefined,
+        missionTitle: typeof missionTitle === 'string' ? missionTitle.slice(0, 60) : undefined,
+      });
+      return res.json({ debrief });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unable to generate AI run debrief via Gemini.';
+      const status = message.includes('GEMINI_API_KEY') ? 503 : 502;
+      return res.status(status).json({ error: message });
+    }
   });
 
   const httpServer = http.createServer(app);

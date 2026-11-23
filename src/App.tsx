@@ -5,6 +5,7 @@ import {
   Check,
   Clock,
   Copy,
+  Gamepad2,
   Globe,
   Moon,
   RefreshCw,
@@ -21,8 +22,11 @@ import AllRecordsResults from './components/AllRecordsResults';
 import BlogSection, { BlogPreviewStrip } from './components/BlogSection';
 import CookieNoticeBanner, { getSavedCookieConsent } from './components/CookieNoticeBanner';
 import DnsEducationGuide from './components/DnsEducationGuide';
+import DnsPacketGame from './components/DnsPacketGame';
 import DomainComparisonSection from './components/DomainComparisonSection';
 import DownloadReportButton from './components/DownloadReportButton';
+import GlobalHealthChart from './components/GlobalHealthChart';
+import InteractiveLogo3D from './components/InteractiveLogo3D';
 import LegalPages, { type LegalPageRoute } from './components/LegalPages';
 import OfflineIndicator from './components/OfflineIndicator';
 import PropagationResults from './components/PropagationResults';
@@ -100,6 +104,7 @@ export default function App() {
   const [rawInput, setRawInput] = useState('');
   const [recordType, setRecordType] = useState<DnsRecordType>('A');
   const [expectedValue, setExpectedValue] = useState('');
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
 
   const [propagationData, setPropagationData] = useState<PropagationResponse | null>(null);
   const [allRecordsData, setAllRecordsData] = useState<DnsLookupResponse | null>(null);
@@ -115,6 +120,8 @@ export default function App() {
   const [recentLookups, setRecentLookups] = useState<RecentLookupEntry[]>(() =>
     getRecentLookups()
   );
+  const [hasTriggeredLookup, setHasTriggeredLookup] = useState(false);
+  const [isGameBarOpen, setIsGameBarOpen] = useState(false);
 
   const debounceTimerRef = useRef<number | null>(null);
   const domainInputRef = useRef<HTMLInputElement | null>(null);
@@ -404,6 +411,7 @@ export default function App() {
         targetType?: DnsRecordType;
         forceRefresh?: boolean;
         propagationOnly?: boolean;
+        revealGame?: boolean;
       }
     ) => {
       const activeType = opts?.targetType ?? recordType;
@@ -414,6 +422,11 @@ export default function App() {
       if (!parsed.isValid) {
         setInputError(parsed.reason ?? 'Please enter a valid domain name.');
         return;
+      }
+
+      if (opts?.revealGame) {
+        setHasTriggeredLookup(true);
+        setIsGameBarOpen(true);
       }
 
       if (parsed.wasModified && inputOverride === undefined) {
@@ -465,7 +478,7 @@ export default function App() {
       window.clearTimeout(debounceTimerRef.current);
     }
     debounceTimerRef.current = window.setTimeout(() => {
-      executeLookup();
+      executeLookup(undefined, { revealGame: true });
     }, 80);
   };
 
@@ -533,26 +546,20 @@ export default function App() {
             adsEnabled ? 'max-w-7xl' : 'max-w-6xl'
           }`}
         >
-          {/* Zone 1: Brand mark & larger wordmark */}
-          <a
-            href="/"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate('home');
-            }}
-            className="inline-flex items-center gap-2.5 sm:gap-3 text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 font-[var(--font-display)]"
-          >
-            <img
-              src="/favicon.svg"
-              alt=""
-              width={32}
-              height={32}
-              className="w-7 h-7 sm:w-8 sm:h-8 shrink-0"
-            />
-            <span>
+          {/* Zone 1: Interactive 3D WebGL Emblem & Brand Wordmark */}
+          <div className="inline-flex items-center gap-2.5 sm:gap-3 shrink-0">
+            <InteractiveLogo3D />
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('home');
+              }}
+              className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0 font-[var(--font-display)]"
+            >
               <span className="text-emerald-700 dark:text-emerald-300">DNS</span> Locator
-            </span>
-          </a>
+            </a>
+          </div>
 
           {/* Zone 2: Concise navigation links (legal pages moved to footer) */}
           <nav
@@ -905,8 +912,9 @@ export default function App() {
 
                   {((rawInput.trim() && sanitizedPreview.wasModified && sanitizedPreview.isValid) ||
                     (sanitizedPreview.isValid &&
-                      sanitizedPreview.apexDomain !== sanitizedPreview.domain)) && (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0 text-xs sm:text-sm">
+                      sanitizedPreview.apexDomain !== sanitizedPreview.domain) ||
+                    hasTriggeredLookup) && (
+                    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 shrink-0 sm:ml-auto text-xs sm:text-sm">
                       {rawInput.trim() &&
                         sanitizedPreview.wasModified &&
                         sanitizedPreview.isValid && (
@@ -928,10 +936,36 @@ export default function App() {
                             {t('checkApex')} ({sanitizedPreview.apexDomain})
                           </button>
                         )}
+
+                      {hasTriggeredLookup && (
+                        <button
+                          type="button"
+                          onClick={() => setIsGameBarOpen((prev) => !prev)}
+                          aria-expanded={isGameBarOpen}
+                          aria-controls="dns-packet-game-bar"
+                          className={`h-8 px-3 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${
+                            isGameBarOpen
+                              ? 'border-emerald-300 dark:border-emerald-700/70 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-emerald-400 dark:hover:border-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-300'
+                          }`}
+                        >
+                          <Gamepad2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                          <span>{isGameBarOpen ? 'Hide Game' : 'Play Game'}</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
               </form>
+
+              {/* Interactive Mini-Game revealed only after submitting a valid Lookup */}
+              {hasTriggeredLookup && isGameBarOpen && (
+                <DnsPacketGame
+                  isSearchingDns={isLoading}
+                  activeDomain={activeDomain}
+                  onClose={() => setIsGameBarOpen(false)}
+                />
+              )}
             </section>
 
             {/* Unified Workspace View Tabs */}
@@ -1179,7 +1213,23 @@ export default function App() {
                   error={combinedPropError}
                   expectedValue={expectedValue}
                   onExpectedValueChange={setExpectedValue}
+                  showHealthChart={false}
+                  selectedRegionId={selectedRegionId}
+                  onSelectRegion={setSelectedRegionId}
                 />
+
+                {/* Global Health & Latency Distribution positioned directly above Compare DNS */}
+                {isPropLoading && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 h-[260px] animate-pulse" />
+                )}
+                {!isPropLoading && propagationData && (
+                  <GlobalHealthChart
+                    regions={propagationData.regions}
+                    expectedValue={expectedValue}
+                    selectedRegionId={selectedRegionId}
+                    onSelectRegion={setSelectedRegionId}
+                  />
+                )}
 
                 <DomainComparisonSection
                   activeDomain={activeDomain}
@@ -1212,6 +1262,8 @@ export default function App() {
                 error={combinedPropError}
                 expectedValue={expectedValue}
                 onExpectedValueChange={setExpectedValue}
+                selectedRegionId={selectedRegionId}
+                onSelectRegion={setSelectedRegionId}
               />
             )}
 

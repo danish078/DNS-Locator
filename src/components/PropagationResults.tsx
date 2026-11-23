@@ -24,6 +24,9 @@ interface PropagationResultsProps {
   error: string | null;
   expectedValue: string;
   onExpectedValueChange: (val: string) => void;
+  showHealthChart?: boolean;
+  selectedRegionId?: string | null;
+  onSelectRegion?: (id: string | null) => void;
 }
 
 const CONTINENTS: ContinentKey[] = [
@@ -86,11 +89,18 @@ export default function PropagationResults({
   error,
   expectedValue,
   onExpectedValueChange,
+  showHealthChart = true,
+  selectedRegionId: controlledSelectedRegionId,
+  onSelectRegion: controlledOnSelectRegion,
 }: PropagationResultsProps) {
   const { t } = useI18n();
   const [continent, setContinent] = useState<ContinentKey>('All');
-  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+  const [internalSelectedRegionId, setInternalSelectedRegionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const selectedRegionId =
+    controlledSelectedRegionId !== undefined ? controlledSelectedRegionId : internalSelectedRegionId;
+  const setSelectedRegionId = controlledOnSelectRegion ?? setInternalSelectedRegionId;
 
   const filteredRegions = useMemo(() => {
     if (!data) return [];
@@ -197,7 +207,9 @@ export default function PropagationResults({
             onSelectRegion={() => {}}
             isLoading={true}
           />
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 h-[260px] animate-pulse" />
+          {showHealthChart && (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 h-[260px] animate-pulse" />
+          )}
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
             <div className="h-10 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-4 flex items-center justify-between">
               <div className="h-3.5 w-32 rounded bg-slate-200 dark:bg-slate-700" />
@@ -281,12 +293,14 @@ export default function PropagationResults({
           />
 
           {/* D3 Global Health & Latency Distribution */}
-          <GlobalHealthChart
-            regions={data.regions}
-            expectedValue={expectedValue}
-            selectedRegionId={selectedRegionId}
-            onSelectRegion={setSelectedRegionId}
-          />
+          {showHealthChart && (
+            <GlobalHealthChart
+              regions={data.regions}
+              expectedValue={expectedValue}
+              selectedRegionId={selectedRegionId}
+              onSelectRegion={setSelectedRegionId}
+            />
+          )}
 
           {/* Continent Segmented Filter */}
           <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-900 border border-transparent dark:border-slate-800 overflow-x-auto">

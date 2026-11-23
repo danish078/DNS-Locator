@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import {
   AlertTriangle,
   ArrowLeftRight,
+  Check,
   CheckCircle2,
+  Copy,
+  FileDiff,
   GitCompareArrows,
   MinusCircle,
-  PlusCircle,
   Search,
   ShieldCheck,
+  XCircle,
 } from 'lucide-react';
 import { getCachedResult, setCachedResult, type RecentLookupEntry } from '../lib/cache';
 import { formatTtl, sanitizeDomainInput } from '../lib/domain';
@@ -25,16 +28,29 @@ interface DomainComparisonSectionProps {
 }
 
 type DiffKind = 'match' | 'empty' | 'different' | 'only-a' | 'only-b';
-type DiffFilter = 'all' | 'diffs';
+type DiffFilter = 'all' | 'matches' | 'mismatches';
+type ComparisonViewMode = 'side-by-side' | 'dns-diff';
+
+interface DiffLineEntry {
+  key: string;
+  status: 'match' | 'mismatch-a' | 'mismatch-b' | 'ttl-mismatch';
+  text: string;
+  ttlA?: number;
+  ttlB?: number;
+}
 
 interface RecordDiffRow {
   type: DnsRecordType;
   diffKind: DiffKind;
+  isMismatch: boolean;
+  isMatch: boolean;
   recordsA: DnsRecordItem[];
   recordsB: DnsRecordItem[];
   sharedKeys: Set<string>;
   onlyAKeys: Set<string>;
   onlyBKeys: Set<string>;
+  ttlMismatchKeys: Set<string>;
+  unifiedLines: DiffLineEntry[];
 }
 
 function recordComparableKey(item: DnsRecordItem): string {
@@ -73,44 +89,59 @@ async function fetchZoneForComparison(
   return json as DnsLookupResponse;
 }
 
-function DiffStatusLabel({ kind }: { kind: DiffKind }) {
-  switch (kind) {
-    case 'match':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Match</span>
-        </span>
-      );
-    case 'empty':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
-          <MinusCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Both Empty</span>
-        </span>
-      );
-    case 'different':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 whitespace-nowrap">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Different</span>
-        </span>
-      );
-    case 'only-a':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-400 whitespace-nowrap">
-          <PlusCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Only Domain A</span>
-        </span>
-      );
-    case 'only-b':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 dark:text-teal-400 whitespace-nowrap">
-          <PlusCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-          <span>Only Domain B</span>
-        </span>
-      );
+function DiffStatusLabel({
+  kind,
+  hasTtlMismatch = false,
+}: {
+  kind: DiffKind;
+  hasTtlMismatch?: boolean;
+}) {
+  if (kind === 'match' && !hasTtlMismatch) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>Match</span>
+      </span>
+    );
   }
+  if (kind === 'match' && hasTtlMismatch) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400 whitespace-nowrap">
+        <XCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>TTL Mismatch</span>
+      </span>
+    );
+  }
+  if (kind === 'empty') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
+        <MinusCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>Both Empty</span>
+      </span>
+    );
+  }
+  if (kind === 'only-a') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400 whitespace-nowrap">
+        <XCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>Mismatch · Only A</span>
+      </span>
+    );
+  }
+  if (kind === 'only-b') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400 whitespace-nowrap">
+        <XCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <span>Mismatch · Only B</span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400 whitespace-nowrap">
+      <XCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+      <span>Mismatch</span>
+    </span>
+  );
 }
 
 export default function DomainComparisonSection({
@@ -126,7 +157,11 @@ export default function DomainComparisonSection({
   const [zoneB, setZoneB] = useState<DnsLookupResponse | null>(null);
   const [isComparing, setIsComparing] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
+
+  const [viewMode, setViewMode] = useState<ComparisonViewMode>('side-by-side');
   const [diffFilter, setDiffFilter] = useState<DiffFilter>('all');
+  const [auditTtl, setAuditTtl] = useState<boolean>(false);
+  const [diffCopied, setDiffCopied] = useState<boolean>(false);
 
   // Keep Domain A synced with the user's active lookup until manually edited
   useEffect(() => {
@@ -226,23 +261,60 @@ export default function DomainComparisonSection({
       const recordsA = zoneA.recordsByType[type] ?? [];
       const recordsB = zoneB.recordsByType[type] ?? [];
 
-      const keysA = new Set(recordsA.map(recordComparableKey));
-      const keysB = new Set(recordsB.map(recordComparableKey));
+      const mapA = new Map<string, DnsRecordItem>();
+      const mapB = new Map<string, DnsRecordItem>();
+      recordsA.forEach((item) => mapA.set(recordComparableKey(item), item));
+      recordsB.forEach((item) => mapB.set(recordComparableKey(item), item));
+
       const sharedKeys = new Set<string>();
       const onlyAKeys = new Set<string>();
       const onlyBKeys = new Set<string>();
+      const ttlMismatchKeys = new Set<string>();
+      const unifiedLines: DiffLineEntry[] = [];
 
-      for (const k of keysA) {
-        if (keysB.has(k)) {
+      for (const [k, itemA] of mapA.entries()) {
+        const itemB = mapB.get(k);
+        if (itemB) {
           sharedKeys.add(k);
+          const ttlDiffers = auditTtl && itemA.ttl !== itemB.ttl;
+          if (ttlDiffers) {
+            ttlMismatchKeys.add(k);
+            unifiedLines.push({
+              key: `ttl-${k}`,
+              status: 'ttl-mismatch',
+              text: formatRecordLine(itemA),
+              ttlA: itemA.ttl,
+              ttlB: itemB.ttl,
+            });
+          } else {
+            unifiedLines.push({
+              key: `eq-${k}`,
+              status: 'match',
+              text: formatRecordLine(itemA),
+              ttlA: itemA.ttl,
+              ttlB: itemB.ttl,
+            });
+          }
         } else {
           onlyAKeys.add(k);
+          unifiedLines.push({
+            key: `a-${k}`,
+            status: 'mismatch-a',
+            text: formatRecordLine(itemA),
+            ttlA: itemA.ttl,
+          });
         }
       }
 
-      for (const k of keysB) {
-        if (!keysA.has(k)) {
+      for (const [k, itemB] of mapB.entries()) {
+        if (!mapA.has(k)) {
           onlyBKeys.add(k);
+          unifiedLines.push({
+            key: `b-${k}`,
+            status: 'mismatch-b',
+            text: formatRecordLine(itemB),
+            ttlB: itemB.ttl,
+          });
         }
       }
 
@@ -259,34 +331,91 @@ export default function DomainComparisonSection({
         diffKind = 'different';
       }
 
+      const isMismatch =
+        diffKind === 'different' ||
+        diffKind === 'only-a' ||
+        diffKind === 'only-b' ||
+        (diffKind === 'match' && ttlMismatchKeys.size > 0);
+      const isMatch = diffKind === 'match' && ttlMismatchKeys.size === 0;
+
       return {
         type,
         diffKind,
+        isMismatch,
+        isMatch,
         recordsA,
         recordsB,
         sharedKeys,
         onlyAKeys,
         onlyBKeys,
+        ttlMismatchKeys,
+        unifiedLines,
       };
     });
+  }, [zoneA, zoneB, auditTtl]);
+
+  const postureMatches = useMemo(() => {
+    if (!zoneA || !zoneB) return true;
+    return (
+      Boolean(zoneA.dnssecValidated) === Boolean(zoneB.dnssecValidated) &&
+      zoneA.emailHealth.hasSpf === zoneB.emailHealth.hasSpf &&
+      zoneA.emailHealth.hasDmarc === zoneB.emailHealth.hasDmarc
+    );
   }, [zoneA, zoneB]);
 
   const diffSummary = useMemo(() => {
-    const matching = diffRows.filter((r) => r.diffKind === 'match').length;
+    const matching = diffRows.filter((r) => r.isMatch).length;
     const empty = diffRows.filter((r) => r.diffKind === 'empty').length;
-    const different = diffRows.filter((r) => r.diffKind === 'different').length;
-    const onlyA = diffRows.filter((r) => r.diffKind === 'only-a').length;
-    const onlyB = diffRows.filter((r) => r.diffKind === 'only-b').length;
-    const totalDiffs = different + onlyA + onlyB;
-    return { matching, empty, different, onlyA, onlyB, totalDiffs };
+    const mismatches = diffRows.filter((r) => r.isMismatch).length;
+    const auditedCount = matching + mismatches;
+    const consistencyPct =
+      auditedCount > 0 ? Math.round((matching / auditedCount) * 100) : 100;
+    return { matching, empty, mismatches, auditedCount, consistencyPct };
   }, [diffRows]);
 
   const visibleRows = useMemo(() => {
     if (diffFilter === 'all') return diffRows;
-    return diffRows.filter(
-      (r) => r.diffKind === 'different' || r.diffKind === 'only-a' || r.diffKind === 'only-b'
-    );
+    if (diffFilter === 'matches') return diffRows.filter((r) => r.isMatch);
+    return diffRows.filter((r) => r.isMismatch);
   }, [diffRows, diffFilter]);
+
+  const handleCopyDiffAudit = async () => {
+    if (!zoneA || !zoneB) return;
+    const lines: string[] = [
+      `DNS Diff Zone Consistency Audit`,
+      `Domain A: ${zoneA.domain}`,
+      `Domain B: ${zoneB.domain}`,
+      `Consistency: ${diffSummary.consistencyPct}% (${diffSummary.matching}/${diffSummary.auditedCount} active record types match)`,
+      `TTL Audit: ${auditTtl ? 'Enabled' : 'Values Only'}`,
+      `---`,
+    ];
+
+    for (const row of diffRows) {
+      if (row.diffKind === 'empty') continue;
+      lines.push(
+        `[${row.type}] ${row.isMatch ? 'MATCH' : 'MISMATCH'}`
+      );
+      for (const entry of row.unifiedLines) {
+        const prefix =
+          entry.status === 'match'
+            ? '  = '
+            : entry.status === 'mismatch-a'
+              ? '  - [A only] '
+              : entry.status === 'mismatch-b'
+                ? '  + [B only] '
+                : `  ~ [TTL ${formatTtl(entry.ttlA ?? 0)} vs ${formatTtl(entry.ttlB ?? 0)}] `;
+        lines.push(`${prefix}${entry.text}`);
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setDiffCopied(true);
+      window.setTimeout(() => setDiffCopied(false), 2000);
+    } catch {
+      // Ignore clipboard failures
+    }
+  };
 
   return (
     <section
@@ -306,11 +435,11 @@ export default function DomainComparisonSection({
                 id="domain-comparison-heading"
                 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100"
               >
-                Side-by-Side Domain DNS Comparison
+                Side-by-Side Domain Comparison &amp; DNS Diff
               </h2>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Select or enter two domains to compare live A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records and highlight differences.
+              Compare live A, AAAA, CNAME, MX, TXT, NS, SOA, and CAA records with automatic green (match) and red (mismatch) zone consistency highlighting.
             </p>
           </div>
 
@@ -459,235 +588,449 @@ export default function DomainComparisonSection({
         </div>
       )}
 
-      {/* Populated Diff Summary + Table */}
+      {/* DNS Diff Summary & Audit Toolbar */}
       {!isComparing && zoneA && zoneB && (
         <>
-          <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
-              <span className="font-semibold text-amber-700 dark:text-amber-400">
-                {diffSummary.totalDiffs} {diffSummary.totalDiffs === 1 ? 'Difference' : 'Differences'}
-              </span>
-              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
-              <span className="text-emerald-700 dark:text-emerald-400 font-medium">
-                {diffSummary.matching} Matching
-              </span>
-              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
-              <span className="text-slate-500 dark:text-slate-400">
-                {diffSummary.empty} Both Empty
-              </span>
+          <div className="px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 space-y-3">
+            {/* Top Audit Metrics & View Mode */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs tabular-nums">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
+                  <FileDiff className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" aria-hidden="true" />
+                  <span>Zone Consistency: {diffSummary.consistencyPct}%</span>
+                </span>
+                <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400" aria-hidden="true" />
+                  <span>{diffSummary.matching} Matches</span>
+                </span>
+                <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-400">
+                  <span className="w-2 h-2 rounded-full bg-rose-600 dark:bg-rose-400" aria-hidden="true" />
+                  <span>{diffSummary.mismatches} Mismatches</span>
+                </span>
+                <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  {diffSummary.empty} Both Empty
+                </span>
+              </div>
+
+              {/* View Switch + Audit TTL + Copy Diff */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  role="tablist"
+                  aria-label="DNS comparison layout"
+                  className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'side-by-side'}
+                    onClick={() => setViewMode('side-by-side')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                      viewMode === 'side-by-side'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Side-by-Side
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'dns-diff'}
+                    onClick={() => setViewMode('dns-diff')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                      viewMode === 'dns-diff'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    DNS Diff Audit
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAuditTtl((prev) => !prev)}
+                  aria-pressed={auditTtl}
+                  className={`h-7 px-2.5 rounded-md border text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    auditTtl
+                      ? 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300'
+                  }`}
+                >
+                  {auditTtl ? 'TTL Diffs: Flagged' : 'Audit TTL Diffs'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyDiffAudit}
+                  className="h-7 px-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  {diffCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                      <span>Diff Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Copy Diff</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <div
-              role="tablist"
-              aria-label="Filter comparison rows"
-              className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800 self-start md:self-auto"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={diffFilter === 'all'}
-                onClick={() => setDiffFilter('all')}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
-                  diffFilter === 'all'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
+            {/* Filter Row: All Types | Matches Only | Mismatches Only */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/70 dark:border-slate-800/70">
+              <div
+                role="tablist"
+                aria-label="Filter DNS Diff rows"
+                className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800"
               >
-                All Types ({diffRows.length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={diffFilter === 'diffs'}
-                onClick={() => setDiffFilter('diffs')}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
-                  diffFilter === 'diffs'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                Differences Only ({diffSummary.totalDiffs})
-              </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={diffFilter === 'all'}
+                  onClick={() => setDiffFilter('all')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                    diffFilter === 'all'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  All Types ({diffRows.length})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={diffFilter === 'matches'}
+                  onClick={() => setDiffFilter('matches')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                    diffFilter === 'matches'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-emerald-700 dark:text-emerald-400 hover:text-emerald-800'
+                  }`}
+                >
+                  Matches ({diffSummary.matching})
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={diffFilter === 'mismatches'}
+                  onClick={() => setDiffFilter('mismatches')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                    diffFilter === 'mismatches'
+                      ? 'bg-rose-600 text-white shadow-2xs'
+                      : 'text-rose-700 dark:text-rose-400 hover:text-rose-800'
+                  }`}
+                >
+                  Mismatches ({diffSummary.mismatches})
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-emerald-200 dark:bg-emerald-800 border border-emerald-400 dark:border-emerald-600" aria-hidden="true" />
+                  <span>Green = Matching Record</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-rose-200 dark:bg-rose-900 border border-rose-400 dark:border-rose-700" aria-hidden="true" />
+                  <span>Red = Record Mismatch</span>
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  <th className="py-2.5 px-4 whitespace-nowrap w-24">Record</th>
-                  <th className="py-2.5 px-4 whitespace-nowrap w-36">Comparison</th>
-                  <th className="py-2.5 px-4 min-w-[240px]" dir="ltr">
-                    <span className="text-sky-700 dark:text-sky-400 mr-1.5">A:</span>
-                    <span className="font-mono text-slate-900 dark:text-slate-100">{zoneA.domain}</span>
-                  </th>
-                  <th className="py-2.5 px-4 min-w-[240px]" dir="ltr">
-                    <span className="text-teal-700 dark:text-teal-400 mr-1.5">B:</span>
-                    <span className="font-mono text-slate-900 dark:text-slate-100">{zoneB.domain}</span>
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs sm:text-sm">
-                {/* Security & Email Posture Row */}
-                <tr
-                  className={
-                    Boolean(zoneA.dnssecValidated) !== Boolean(zoneB.dnssecValidated) ||
-                    zoneA.emailHealth.hasSpf !== zoneB.emailHealth.hasSpf ||
-                    zoneA.emailHealth.hasDmarc !== zoneB.emailHealth.hasDmarc
-                      ? 'bg-amber-50/40 dark:bg-amber-950/15'
-                      : ''
-                  }
-                >
-                  <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap align-top">
-                    Posture
-                  </td>
-                  <td className="py-3 px-4 align-top">
-                    <DiffStatusLabel
-                      kind={
-                        Boolean(zoneA.dnssecValidated) === Boolean(zoneB.dnssecValidated) &&
-                        zoneA.emailHealth.hasSpf === zoneB.emailHealth.hasSpf &&
-                        zoneA.emailHealth.hasDmarc === zoneB.emailHealth.hasDmarc
-                          ? 'match'
-                          : 'different'
-                      }
-                    />
-                  </td>
-                  <td className="py-3 px-4 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1">
-                    <div className="inline-flex items-center gap-1.5 font-medium">
-                      <ShieldCheck
-                        className={`w-3.5 h-3.5 ${
-                          zoneA.dnssecValidated
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-slate-400 dark:text-slate-500'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <span>DNSSEC {zoneA.dnssecValidated ? 'Signed' : 'Unsigned'}</span>
-                    </div>
-                    <div className="text-slate-500 dark:text-slate-400 tabular-nums">
-                      MX {zoneA.emailHealth.hasMx ? 'OK' : 'Missing'} · SPF{' '}
-                      {zoneA.emailHealth.hasSpf ? 'OK' : 'Missing'} · DMARC{' '}
-                      {zoneA.emailHealth.hasDmarc ? 'OK' : 'Missing'}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1">
-                    <div className="inline-flex items-center gap-1.5 font-medium">
-                      <ShieldCheck
-                        className={`w-3.5 h-3.5 ${
-                          zoneB.dnssecValidated
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-slate-400 dark:text-slate-500'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <span>DNSSEC {zoneB.dnssecValidated ? 'Signed' : 'Unsigned'}</span>
-                    </div>
-                    <div className="text-slate-500 dark:text-slate-400 tabular-nums">
-                      MX {zoneB.emailHealth.hasMx ? 'OK' : 'Missing'} · SPF{' '}
-                      {zoneB.emailHealth.hasSpf ? 'OK' : 'Missing'} · DMARC{' '}
-                      {zoneB.emailHealth.hasDmarc ? 'OK' : 'Missing'}
-                    </div>
-                  </td>
-                </tr>
-
-                {visibleRows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="py-8 px-4 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400"
-                    >
-                      All checked DNS record types match between{' '}
-                      <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
-                        {zoneA.domain}
-                      </span>{' '}
-                      and{' '}
-                      <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
-                        {zoneB.domain}
+          {viewMode === 'dns-diff' ? (
+            /* Unified DNS Diff Audit Stream */
+            <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+              {visibleRows.length === 0 ? (
+                <div className="py-10 px-4 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                  No DNS record types match the current filter between{' '}
+                  <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                    {zoneA.domain}
+                  </span>{' '}
+                  and{' '}
+                  <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                    {zoneB.domain}
+                  </span>
+                  .
+                </div>
+              ) : (
+                visibleRows.map((row) => (
+                  <div
+                    key={row.type}
+                    className={`p-4 sm:px-5 space-y-2 ${
+                      row.isMatch
+                        ? 'bg-emerald-50/45 dark:bg-emerald-950/15'
+                        : row.isMismatch
+                          ? 'bg-rose-50/45 dark:bg-rose-950/15'
+                          : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
+                          {row.type}
+                        </span>
+                        <DiffStatusLabel
+                          kind={row.diffKind}
+                          hasTtlMismatch={row.ttlMismatchKeys.size > 0}
+                        />
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+                        A: {row.recordsA.length} · B: {row.recordsB.length}
                       </span>
-                      .
+                    </div>
+
+                    {row.unifiedLines.length === 0 ? (
+                      <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                        No {row.type} records published on either domain.
+                      </div>
+                    ) : (
+                      <ul className="space-y-1.5 font-mono text-xs" dir="ltr">
+                        {row.unifiedLines.map((line) => {
+                          const isLineMatch = line.status === 'match';
+                          return (
+                            <li
+                              key={line.key}
+                              className={`rounded-md px-2.5 py-1.5 border flex flex-wrap items-center justify-between gap-2 break-all ${
+                                isLineMatch
+                                  ? 'bg-emerald-100/75 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
+                                  : 'bg-rose-100/80 dark:bg-rose-900/35 border-rose-200 dark:border-rose-800/70 text-rose-950 dark:text-rose-100 font-medium'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2 min-w-0">
+                                <span
+                                  className={`font-bold shrink-0 ${
+                                    isLineMatch
+                                      ? 'text-emerald-700 dark:text-emerald-300'
+                                      : 'text-rose-700 dark:text-rose-300'
+                                  }`}
+                                >
+                                  {line.status === 'match'
+                                    ? '='
+                                    : line.status === 'mismatch-a'
+                                      ? '−A'
+                                      : line.status === 'mismatch-b'
+                                        ? '+B'
+                                        : '~TTL'}
+                                </span>
+                                <span className="break-all">{line.text}</span>
+                              </div>
+                              <span className="text-[11px] shrink-0 tabular-nums opacity-80">
+                                {line.status === 'match'
+                                  ? `Match · ${formatTtl(line.ttlA ?? 0)}`
+                                  : line.status === 'mismatch-a'
+                                    ? `Only ${zoneA.domain} · ${formatTtl(line.ttlA ?? 0)}`
+                                    : line.status === 'mismatch-b'
+                                      ? `Only ${zoneB.domain} · ${formatTtl(line.ttlB ?? 0)}`
+                                      : `TTL ${formatTtl(line.ttlA ?? 0)} vs ${formatTtl(line.ttlB ?? 0)}`}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            /* Side-by-Side Table with Color-Coded Green (Match) & Red (Mismatch) Highlights */
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <th className="py-2.5 px-4 whitespace-nowrap w-24">Record</th>
+                    <th className="py-2.5 px-4 whitespace-nowrap w-40">DNS Diff</th>
+                    <th className="py-2.5 px-4 min-w-[240px]" dir="ltr">
+                      <span className="text-sky-700 dark:text-sky-400 mr-1.5">A:</span>
+                      <span className="font-mono text-slate-900 dark:text-slate-100">{zoneA.domain}</span>
+                    </th>
+                    <th className="py-2.5 px-4 min-w-[240px]" dir="ltr">
+                      <span className="text-teal-700 dark:text-teal-400 mr-1.5">B:</span>
+                      <span className="font-mono text-slate-900 dark:text-slate-100">{zoneB.domain}</span>
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs sm:text-sm">
+                  {/* Security & Email Posture Row */}
+                  <tr
+                    className={
+                      postureMatches
+                        ? 'bg-emerald-50/50 dark:bg-emerald-950/15'
+                        : 'bg-rose-50/55 dark:bg-rose-950/20'
+                    }
+                  >
+                    <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap align-top">
+                      Posture
+                    </td>
+                    <td className="py-3 px-4 align-top">
+                      <DiffStatusLabel kind={postureMatches ? 'match' : 'different'} />
+                    </td>
+                    <td className="py-3 px-4 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                      <div className="inline-flex items-center gap-1.5 font-medium">
+                        <ShieldCheck
+                          className={`w-3.5 h-3.5 ${
+                            zoneA.dnssecValidated
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-slate-400 dark:text-slate-500'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span>DNSSEC {zoneA.dnssecValidated ? 'Signed' : 'Unsigned'}</span>
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 tabular-nums">
+                        MX {zoneA.emailHealth.hasMx ? 'OK' : 'Missing'} · SPF{' '}
+                        {zoneA.emailHealth.hasSpf ? 'OK' : 'Missing'} · DMARC{' '}
+                        {zoneA.emailHealth.hasDmarc ? 'OK' : 'Missing'}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 align-top text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                      <div className="inline-flex items-center gap-1.5 font-medium">
+                        <ShieldCheck
+                          className={`w-3.5 h-3.5 ${
+                            zoneB.dnssecValidated
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-slate-400 dark:text-slate-500'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span>DNSSEC {zoneB.dnssecValidated ? 'Signed' : 'Unsigned'}</span>
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 tabular-nums">
+                        MX {zoneB.emailHealth.hasMx ? 'OK' : 'Missing'} · SPF{' '}
+                        {zoneB.emailHealth.hasSpf ? 'OK' : 'Missing'} · DMARC{' '}
+                        {zoneB.emailHealth.hasDmarc ? 'OK' : 'Missing'}
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  visibleRows.map((row) => {
-                    const rowBg =
-                      row.diffKind === 'different'
-                        ? 'bg-amber-50/40 dark:bg-amber-950/15'
-                        : row.diffKind === 'only-a' || row.diffKind === 'only-b'
-                          ? 'bg-sky-50/40 dark:bg-sky-950/15'
+
+                  {visibleRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="py-8 px-4 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400"
+                      >
+                        No DNS record types match the current filter between{' '}
+                        <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          {zoneA.domain}
+                        </span>{' '}
+                        and{' '}
+                        <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          {zoneB.domain}
+                        </span>
+                        .
+                      </td>
+                    </tr>
+                  ) : (
+                    visibleRows.map((row) => {
+                      const rowBg = row.isMatch
+                        ? 'bg-emerald-50/50 dark:bg-emerald-950/15'
+                        : row.isMismatch
+                          ? 'bg-rose-50/55 dark:bg-rose-950/20'
                           : '';
 
-                    return (
-                      <tr key={row.type} className={rowBg}>
-                        <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap align-top">
-                          {row.type}
-                        </td>
-                        <td className="py-3 px-4 align-top">
-                          <DiffStatusLabel kind={row.diffKind} />
-                        </td>
-                        <td className="py-3 px-4 align-top" dir="ltr">
-                          {row.recordsA.length === 0 ? (
-                            <span className="text-xs text-slate-400 dark:text-slate-500">
-                              No {row.type} record published
-                            </span>
-                          ) : (
-                            <ul className="space-y-1.5 font-mono text-xs">
-                              {row.recordsA.map((item, idx) => {
-                                const isUnique = row.onlyAKeys.has(recordComparableKey(item));
-                                return (
-                                  <li
-                                    key={`${idx}-${item.data}`}
-                                    className={`rounded-md px-2 py-1 break-all flex items-start justify-between gap-2 ${
-                                      isUnique
-                                        ? 'bg-amber-100/75 dark:bg-amber-900/35 text-amber-950 dark:text-amber-100 font-medium'
-                                        : 'text-slate-800 dark:text-slate-200'
-                                    }`}
-                                  >
-                                    <span>{formatRecordLine(item)}</span>
-                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
-                                      {formatTtl(item.ttl)}
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 align-top" dir="ltr">
-                          {row.recordsB.length === 0 ? (
-                            <span className="text-xs text-slate-400 dark:text-slate-500">
-                              No {row.type} record published
-                            </span>
-                          ) : (
-                            <ul className="space-y-1.5 font-mono text-xs">
-                              {row.recordsB.map((item, idx) => {
-                                const isUnique = row.onlyBKeys.has(recordComparableKey(item));
-                                return (
-                                  <li
-                                    key={`${idx}-${item.data}`}
-                                    className={`rounded-md px-2 py-1 break-all flex items-start justify-between gap-2 ${
-                                      isUnique
-                                        ? 'bg-amber-100/75 dark:bg-amber-900/35 text-amber-950 dark:text-amber-100 font-medium'
-                                        : 'text-slate-800 dark:text-slate-200'
-                                    }`}
-                                  >
-                                    <span>{formatRecordLine(item)}</span>
-                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
-                                      {formatTtl(item.ttl)}
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                      return (
+                        <tr key={row.type} className={rowBg}>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap align-top">
+                            {row.type}
+                          </td>
+                          <td className="py-3 px-4 align-top">
+                            <DiffStatusLabel
+                              kind={row.diffKind}
+                              hasTtlMismatch={row.ttlMismatchKeys.size > 0}
+                            />
+                          </td>
+                          <td className="py-3 px-4 align-top" dir="ltr">
+                            {row.recordsA.length === 0 ? (
+                              <span
+                                className={`text-xs ${
+                                  row.isMismatch
+                                    ? 'text-rose-700 dark:text-rose-400 font-medium'
+                                    : 'text-slate-400 dark:text-slate-500'
+                                }`}
+                              >
+                                {row.isMismatch
+                                  ? `Missing ${row.type} record`
+                                  : `No ${row.type} record published`}
+                              </span>
+                            ) : (
+                              <ul className="space-y-1.5 font-mono text-xs">
+                                {row.recordsA.map((item, idx) => {
+                                  const key = recordComparableKey(item);
+                                  const isLineMismatch =
+                                    row.onlyAKeys.has(key) || row.ttlMismatchKeys.has(key);
+                                  return (
+                                    <li
+                                      key={`${idx}-${item.data}`}
+                                      className={`rounded-md px-2 py-1 border break-all flex items-start justify-between gap-2 ${
+                                        isLineMismatch
+                                          ? 'bg-rose-100/85 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800/70 text-rose-950 dark:text-rose-100 font-medium'
+                                          : 'bg-emerald-100/75 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
+                                      }`}
+                                    >
+                                      <span>{formatRecordLine(item)}</span>
+                                      <span className="text-[11px] opacity-80 shrink-0 tabular-nums">
+                                        {formatTtl(item.ttl)}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 align-top" dir="ltr">
+                            {row.recordsB.length === 0 ? (
+                              <span
+                                className={`text-xs ${
+                                  row.isMismatch
+                                    ? 'text-rose-700 dark:text-rose-400 font-medium'
+                                    : 'text-slate-400 dark:text-slate-500'
+                                }`}
+                              >
+                                {row.isMismatch
+                                  ? `Missing ${row.type} record`
+                                  : `No ${row.type} record published`}
+                              </span>
+                            ) : (
+                              <ul className="space-y-1.5 font-mono text-xs">
+                                {row.recordsB.map((item, idx) => {
+                                  const key = recordComparableKey(item);
+                                  const isLineMismatch =
+                                    row.onlyBKeys.has(key) || row.ttlMismatchKeys.has(key);
+                                  return (
+                                    <li
+                                      key={`${idx}-${item.data}`}
+                                      className={`rounded-md px-2 py-1 border break-all flex items-start justify-between gap-2 ${
+                                        isLineMismatch
+                                          ? 'bg-rose-100/85 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800/70 text-rose-950 dark:text-rose-100 font-medium'
+                                          : 'bg-emerald-100/75 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
+                                      }`}
+                                    >
+                                      <span>{formatRecordLine(item)}</span>
+                                      <span className="text-[11px] opacity-80 shrink-0 tabular-nums">
+                                        {formatTtl(item.ttl)}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </section>

@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { Activity, CheckCircle2, Globe } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
+import { hasWebGLSupport } from '../lib/threeUtils';
 import type { RegionalCheckpointResult } from '../types/dns';
+import GlobeHeatmap3D from './GlobeHeatmap3D';
 
 interface WorldPropagationMapProps {
   regions: RegionalCheckpointResult[];
@@ -9,6 +12,9 @@ interface WorldPropagationMapProps {
   onSelectRegion: (id: string | null) => void;
   isLoading: boolean;
 }
+
+type MapOverlayMode = 'globe3d' | 'heatmap' | 'status';
+type LatencyTier = 'fast' | 'moderate' | 'slow';
 
 const SVG_WIDTH = 800;
 const SVG_HEIGHT = 400;
@@ -33,6 +39,41 @@ function isRegionPropagated(
   return true;
 }
 
+function classifyLatencyTier(latencyMs: number): LatencyTier {
+  if (latencyMs < 50) return 'fast';
+  if (latencyMs <= 150) return 'moderate';
+  return 'slow';
+}
+
+function getHaloRadius(latencyMs: number, tier: LatencyTier, isSelected: boolean): number {
+  const baseByTier =
+    tier === 'fast'
+      ? 24 + Math.min(4, (latencyMs / 50) * 4)
+      : tier === 'moderate'
+        ? 30 + Math.min(6, ((latencyMs - 50) / 100) * 6)
+        : 38 + Math.min(10, ((latencyMs - 150) / 250) * 10);
+  return isSelected ? baseByTier + 7 : baseByTier;
+}
+
+function useDarkModeObserver(): boolean {
+  const [isDark, setIsDark] = useState<boolean>(() =>
+    typeof document !== 'undefined'
+      ? document.documentElement.classList.contains('dark')
+      : false
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setIsDark(root.classList.contains('dark'));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark;
+}
+
 export default function WorldPropagationMap({
   regions,
   expectedValue,
@@ -41,20 +82,92 @@ export default function WorldPropagationMap({
   isLoading,
 }: WorldPropagationMapProps) {
   const { t } = useI18n();
+  const rawUid = useId();
+  const uid = rawUid.replace(/[^a-zA-Z0-9_-]/g, '');
+  const isDark = useDarkModeObserver();
+
+  const [mapMode, setMapMode] = useState<MapOverlayMode>(() =>
+    hasWebGLSupport() ? 'globe3d' : 'heatmap'
+  );
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const tierPalette = useMemo(
+    () => ({
+      fast: {
+        label: 'Fast (<50ms)',
+        shortLabel: '< 50 ms',
+        pin: isDark ? '#22C55E' : '#16A34A',
+        halo: isDark ? '#4ADE80' : '#22C55E',
+        ring: isDark ? '#14532D' : '#DCFCE7',
+        text: isDark ? '#4ADE80' : '#15803D',
+      },
+      moderate: {
+        label: 'Moderate (50-150ms)',
+        shortLabel: '50-150 ms',
+        pin: isDark ? '#FACC15' : '#CA8A04',
+        halo: isDark ? '#FDE047' : '#FACC15',
+        ring: isDark ? '#713F12' : '#FEF9C3',
+        text: isDark ? '#FDE047' : '#A16207',
+      },
+      slow: {
+        label: 'High (>150ms)',
+        shortLabel: '> 150 ms',
+        pin: isDark ? '#F87171' : '#DC2626',
+        halo: isDark ? '#EF4444' : '#EF4444',
+        ring: isDark ? '#7F1D1D' : '#FEE2E2',
+        text: isDark ? '#FCA5A5' : '#B91C1C',
+      },
+    }),
+    [isDark]
+  );
 
   const projected = useMemo(() => {
     return regions.map((r) => {
       const propagated = isRegionPropagated(r, expectedValue);
+      const tier = classifyLatencyTier(r.latencyMs);
+      const latencyStyle = tierPalette[tier];
+      const statusStyle = propagated
+        ? {
+            fill: isDark ? '#22C55E' : '#16A34A',
+            ring: isDark ? '#14532D' : '#DCFCE7',
+            text: isDark ? '#4ADE80' : '#15803D',
+            label: t('statusPropagated'),
+          }
+        : {
+            fill: isDark ? '#F87171' : '#DC2626',
+            ring: isDark ? '#7F1D1D' : '#FEE2E2',
+            text: isDark ? '#FCA5A5' : '#B91C1C',
+            label: t('statusNonPropagated'),
+          };
+
       return {
         region: r,
         ...projectPoint(r.lat, r.lng),
-        colors: propagated
-          ? { fill: '#16A34A', ring: '#DCFCE7', label: t('statusPropagated') }
-          : { fill: '#DC2626', ring: '#FEE2E2', label: t('statusNonPropagated') },
+        propagated,
+        tier,
+        latencyStyle,
+        statusStyle,
       };
     });
-  }, [regions, expectedValue, t]);
+  }, [regions, expectedValue, tierPalette, isDark, t]);
+
+  // Draw faster/lower-latency halos first and slower/higher-latency halos above so hotspots remain visible
+  const haloSorted = useMemo(
+    () => [...projected].sort((a, b) => a.region.latencyMs - b.region.latencyMs),
+    [projected]
+  );
+
+  const tierCounts = useMemo(() => {
+    let fast = 0;
+    let moderate = 0;
+    let slow = 0;
+    for (const item of projected) {
+      if (item.tier === 'fast') fast++;
+      else if (item.tier === 'moderate') moderate++;
+      else slow++;
+    }
+    return { fast, moderate, slow };
+  }, [projected]);
 
   const activePin = useMemo(() => {
     const targetId = hoveredId ?? selectedRegionId;
@@ -67,29 +180,150 @@ export default function WorldPropagationMap({
       dir="ltr"
       className="relative w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden"
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-          {t('globalResolverDist')}
-        </span>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A]" aria-hidden="true" />
-            <span>{t('statusPropagated')}</span>
+      {/* Header Bar with Mode Switcher & Synchronized Legend */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            {t('globalResolverDist')}
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626]" aria-hidden="true" />
-            <span>{t('statusNonPropagated')}</span>
-          </span>
+
+          <div
+            role="tablist"
+            aria-label="Map visualization mode"
+            className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700/70 overflow-x-auto max-w-full"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mapMode === 'globe3d'}
+              onClick={() => setMapMode('globe3d')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                mapMode === 'globe3d'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <Globe className="w-3 h-3 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <span>3D Heat Globe</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mapMode === 'heatmap'}
+              onClick={() => setMapMode('heatmap')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                mapMode === 'heatmap'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <Activity className="w-3 h-3 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <span>2D Heatmap</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mapMode === 'status'}
+              onClick={() => setMapMode('status')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                mapMode === 'status'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+              <span>Status Map</span>
+            </button>
+          </div>
         </div>
+
+        {mapMode === 'heatmap' || mapMode === 'globe3d' ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600 dark:text-slate-300 tabular-nums">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: tierPalette.fast.pin }}
+                aria-hidden="true"
+              />
+              <span>
+                &lt;50ms{regions.length > 0 ? ` (${tierCounts.fast})` : ''}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: tierPalette.moderate.pin }}
+                aria-hidden="true"
+              />
+              <span>
+                50–150ms{regions.length > 0 ? ` (${tierCounts.moderate})` : ''}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: tierPalette.slow.pin }}
+                aria-hidden="true"
+              />
+              <span>
+                &gt;150ms{regions.length > 0 ? ` (${tierCounts.slow})` : ''}
+              </span>
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A]" aria-hidden="true" />
+              <span>{t('statusPropagated')}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626]" aria-hidden="true" />
+              <span>{t('statusNonPropagated')}</span>
+            </span>
+          </div>
+        )}
       </div>
 
+      {mapMode === 'globe3d' ? (
+        <GlobeHeatmap3D
+          regions={regions}
+          expectedValue={expectedValue}
+          selectedRegionId={selectedRegionId}
+          onSelectRegion={onSelectRegion}
+          isLoading={isLoading}
+          isDark={isDark}
+          onWebglUnavailable={() => setMapMode('heatmap')}
+        />
+      ) : (
       <div className="relative w-full aspect-[2/1] max-h-[340px] min-h-[220px] select-none">
         <svg
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           className="w-full h-full block"
           role="img"
-          aria-label="World map showing global DNS propagation checkpoints"
+          aria-label={
+            mapMode === 'heatmap'
+              ? 'World map displaying a color-coded latency heatmap across 18 global DNS regions'
+              : 'World map showing global DNS propagation checkpoints'
+          }
         >
+          <defs>
+            <radialGradient id={`${uid}-heat-fast`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={tierPalette.fast.halo} stopOpacity={isDark ? 0.56 : 0.48} />
+              <stop offset="45%" stopColor={tierPalette.fast.halo} stopOpacity={isDark ? 0.24 : 0.2} />
+              <stop offset="100%" stopColor={tierPalette.fast.halo} stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id={`${uid}-heat-moderate`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={tierPalette.moderate.halo} stopOpacity={isDark ? 0.62 : 0.54} />
+              <stop offset="48%" stopColor={tierPalette.moderate.halo} stopOpacity={isDark ? 0.26 : 0.22} />
+              <stop offset="100%" stopColor={tierPalette.moderate.halo} stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id={`${uid}-heat-slow`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={tierPalette.slow.halo} stopOpacity={isDark ? 0.68 : 0.58} />
+              <stop offset="50%" stopColor={tierPalette.slow.halo} stopOpacity={isDark ? 0.28 : 0.24} />
+              <stop offset="100%" stopColor={tierPalette.slow.halo} stopOpacity="0" />
+            </radialGradient>
+          </defs>
+
           {/* Subtle latitude / longitude graticule */}
           <g className="stroke-slate-200 dark:stroke-slate-800" strokeWidth="0.6" strokeDasharray="2 3">
             <line x1="0" y1="100" x2="800" y2="100" />
@@ -135,10 +369,33 @@ export default function WorldPropagationMap({
             <path d="M 762 296 L 774 282 L 778 292 L 766 306 Z" />
           </g>
 
+          {/* Radial Latency Heat Halos (Heatmap Mode) */}
+          {!isLoading && mapMode === 'heatmap' && (
+            <g className="pointer-events-none">
+              {haloSorted.map(({ region, x, y, tier }) => {
+                const isSelected = selectedRegionId === region.id || hoveredId === region.id;
+                const haloR = getHaloRadius(region.latencyMs, tier, isSelected);
+                return (
+                  <circle
+                    key={`halo-${region.id}`}
+                    cx={x}
+                    cy={y}
+                    r={haloR}
+                    fill={`url(#${uid}-heat-${tier})`}
+                    opacity={selectedRegionId && !isSelected ? 0.55 : 1}
+                  />
+                );
+              })}
+            </g>
+          )}
+
           {/* Regional Checkpoints */}
           {!isLoading &&
-            projected.map(({ region, x, y, colors }) => {
+            projected.map(({ region, x, y, propagated, latencyStyle, statusStyle }) => {
               const isSelected = selectedRegionId === region.id || hoveredId === region.id;
+              const pinFill = mapMode === 'heatmap' ? latencyStyle.pin : statusStyle.fill;
+              const ringFill = mapMode === 'heatmap' ? latencyStyle.ring : statusStyle.ring;
+
               return (
                 <g
                   key={region.id}
@@ -151,7 +408,7 @@ export default function WorldPropagationMap({
                   }
                   role="button"
                   tabIndex={0}
-                  aria-label={`${region.city}, ${region.country}: ${colors.label}`}
+                  aria-label={`${region.city}, ${region.country}: ${latencyStyle.label}, ${region.latencyMs} ms, ${statusStyle.label}`}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
@@ -160,14 +417,24 @@ export default function WorldPropagationMap({
                   }}
                 >
                   <circle
-                    r={isSelected ? 12 : 9}
-                    fill={colors.ring}
-                    opacity={isSelected ? 0.9 : 0.65}
+                    r={isSelected ? 11.5 : 8.5}
+                    fill={ringFill}
+                    opacity={isSelected ? 0.92 : 0.65}
                   />
+                  {/* Explicit dashed warning ring if a node is Non-Propagated while viewing Heatmap */}
+                  {mapMode === 'heatmap' && !propagated && (
+                    <circle
+                      r={isSelected ? 10.5 : 8}
+                      fill="none"
+                      stroke={isDark ? '#F87171' : '#DC2626'}
+                      strokeWidth="1.5"
+                      strokeDasharray="2 2"
+                    />
+                  )}
                   <circle
-                    r={isSelected ? 5.5 : 4.2}
-                    fill={colors.fill}
-                    stroke="#FFFFFF"
+                    r={isSelected ? 5.6 : 4.4}
+                    fill={pinFill}
+                    stroke={isDark ? '#0F172A' : '#FFFFFF'}
                     strokeWidth="1.5"
                   />
                 </g>
@@ -185,10 +452,10 @@ export default function WorldPropagationMap({
 
         {activePin && !isLoading && (
           <div
-            className="pointer-events-none absolute z-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-md text-xs max-w-[260px]"
+            className="pointer-events-none absolute z-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-3 py-2 shadow-md text-xs max-w-[270px]"
             style={{
-              left: `${Math.min(72, Math.max(4, (activePin.x / SVG_WIDTH) * 100))}%`,
-              top: `${Math.min(68, Math.max(6, (activePin.y / SVG_HEIGHT) * 100))}%`,
+              left: `${Math.min(70, Math.max(4, (activePin.x / SVG_WIDTH) * 100))}%`,
+              top: `${Math.min(66, Math.max(6, (activePin.y / SVG_HEIGHT) * 100))}%`,
             }}
           >
             <div className="font-semibold text-slate-900 dark:text-slate-100">
@@ -198,18 +465,21 @@ export default function WorldPropagationMap({
               {activePin.region.provider}
             </div>
             <div className="mt-1.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 truncate">
-              {activePin.region.primaryValue ?? activePin.colors.label}
+              {activePin.region.primaryValue ?? activePin.statusStyle.label}
             </div>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-              <span style={{ color: activePin.colors.fill }} className="font-medium">
-                {activePin.colors.label}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+              <span style={{ color: activePin.statusStyle.text }} className="font-medium">
+                {activePin.statusStyle.label}
               </span>
               <span aria-hidden="true">·</span>
-              <span>{activePin.region.latencyMs} ms</span>
+              <span style={{ color: activePin.latencyStyle.text }} className="font-mono font-semibold">
+                {activePin.region.latencyMs} ms ({activePin.latencyStyle.shortLabel})
+              </span>
             </div>
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
