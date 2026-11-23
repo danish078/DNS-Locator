@@ -1063,6 +1063,17 @@ async function startServer() {
       `${req.protocol}://${req.get('host') || 'dnslocator.online'}`;
     const pages = [
       '/',
+      '/blog',
+      '/blog/how-to-run-a-global-dns-check-with-dns-locator',
+      '/blog/ip-address-lookup-and-ip-number-search-guide',
+      '/blog/what-is-my-isp-number-troubleshooting-local-dns-cache',
+      '/blog/using-tracert-and-dns-check-to-diagnose-routing-delays',
+      '/blog/find-open-ports-after-dns-a-record-migration',
+      '/blog/mac-address-lookup-and-mac-oui-lookup-for-network-admins',
+      '/blog/reverse-image-search-and-google-photo-lookup-for-brand-security',
+      '/blog/morse-code-translator-to-dns-packets-signal-encoding-history',
+      '/blog/hex-color-to-pantone-visual-qa-for-multi-region-dns-deployments',
+      '/blog/complete-website-launch-toolkit-dns-ip-mac-signal-and-brand-checks',
       '/about',
       '/contact',
       '/privacy',
@@ -1073,7 +1084,7 @@ async function startServer() {
     const urls = pages
       .map(
         (p) =>
-          `  <url>\n    <loc>${origin}${p}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p === '/' ? 'weekly' : 'monthly'}</changefreq>\n    <priority>${p === '/' ? '1.0' : '0.6'}</priority>\n  </url>`
+          `  <url>\n    <loc>${origin}${p}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p === '/' || p === '/blog' ? 'weekly' : 'monthly'}</changefreq>\n    <priority>${p === '/' ? '1.0' : p.startsWith('/blog') ? '0.8' : '0.6'}</priority>\n  </url>`
       )
       .join('\n');
 
@@ -1447,6 +1458,73 @@ async function startServer() {
       },
       appType: 'spa',
     });
+    if (process.env.DISABLE_HMR === 'true') {
+      // Unregister any previously installed dev Service Worker so stale cached HTML cannot invoke HMR
+      app.get('/dev-sw.js', (_req: Request, res: Response) => {
+        res
+          .status(200)
+          .set({
+            'Content-Type': 'text/javascript',
+            'Cache-Control': 'no-store',
+          })
+          .send(
+            `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    try {
+      const keys = await self.caches.keys();
+      await Promise.all(keys.map((key) => self.caches.delete(key)));
+    } catch {}
+    await self.registration.unregister();
+  })());
+});
+`
+          );
+      });
+
+      app.get('/@vite-plugin-pwa/pwa-entry-point-loaded', (_req: Request, res: Response) => {
+        res
+          .status(200)
+          .set({
+            'Content-Type': 'text/javascript',
+            'Cache-Control': 'no-store',
+          })
+          .send('export default function registerDevSW() {}\n');
+      });
+
+      app.get('/@vite/client', async (_req: Request, res: Response, next) => {
+        try {
+          const result = await vite.transformRequest('/@vite/client');
+          if (!result) {
+            next();
+            return;
+          }
+          let code = result.code;
+          if (code.includes('ws.send(JSON.stringify(data));')) {
+            code = code.replace(
+              'ws.send(JSON.stringify(data));',
+              'if (ws && ws.readyState === ws.OPEN) { ws.send(JSON.stringify(data)); }'
+            );
+          }
+          if (code.includes('async connect(handlers) {')) {
+            code = code.replace(
+              'async connect(handlers) {',
+              'async connect(handlers) { return;'
+            );
+          }
+          res
+            .status(200)
+            .set({
+              'Content-Type': 'text/javascript',
+              'Cache-Control': 'no-store',
+            })
+            .send(code);
+        } catch (err) {
+          next(err);
+        }
+      });
+    }
+
     if (googleVerifyToken) {
       app.use(async (req, res, next) => {
         if (

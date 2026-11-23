@@ -18,13 +18,17 @@ import {
 } from 'lucide-react';
 import AdSlotWrapper from './components/AdSlotWrapper';
 import AllRecordsResults from './components/AllRecordsResults';
+import BlogSection, { BlogPreviewStrip } from './components/BlogSection';
 import CookieNoticeBanner, { getSavedCookieConsent } from './components/CookieNoticeBanner';
 import DnsEducationGuide from './components/DnsEducationGuide';
+import DomainComparisonSection from './components/DomainComparisonSection';
+import DownloadReportButton from './components/DownloadReportButton';
 import LegalPages, { type LegalPageRoute } from './components/LegalPages';
 import OfflineIndicator from './components/OfflineIndicator';
 import PropagationResults from './components/PropagationResults';
 import PWAInstallButton from './components/PWAInstallButton';
 import { NotFoundTemplate } from './components/StatusTemplates';
+import { getBlogPostBySlug } from './data/blogs';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import {
   initializeTracking,
@@ -50,19 +54,27 @@ import {
   type PropagationResponse,
 } from './types/dns';
 
-type AppRoute = 'home' | LegalPageRoute | 'not-found';
+type AppRoute = 'home' | LegalPageRoute | 'blog' | 'blog-post' | 'not-found';
 type WorkspaceView = 'overview' | 'all' | 'regions';
 type ThemeMode = 'light' | 'dark';
 
-function getRouteFromPath(pathname: string): AppRoute {
+function parseRouteFromPath(pathname: string): { route: AppRoute; blogSlug: string | null } {
   const clean = pathname.replace(/\/+$/, '') || '/';
-  if (clean === '/' || clean === '/index.html') return 'home';
-  if (clean === '/about') return 'about';
-  if (clean === '/contact') return 'contact';
-  if (clean === '/privacy') return 'privacy';
-  if (clean === '/terms') return 'terms';
-  if (clean === '/disclaimer') return 'disclaimer';
-  return 'not-found';
+  if (clean === '/' || clean === '/index.html') return { route: 'home', blogSlug: null };
+  if (clean === '/about') return { route: 'about', blogSlug: null };
+  if (clean === '/contact') return { route: 'contact', blogSlug: null };
+  if (clean === '/privacy') return { route: 'privacy', blogSlug: null };
+  if (clean === '/terms') return { route: 'terms', blogSlug: null };
+  if (clean === '/disclaimer') return { route: 'disclaimer', blogSlug: null };
+  if (clean === '/blog') return { route: 'blog', blogSlug: null };
+  if (clean.startsWith('/blog/')) {
+    const slug = clean.slice('/blog/'.length);
+    if (slug && getBlogPostBySlug(slug)) {
+      return { route: 'blog-post', blogSlug: slug };
+    }
+    return { route: 'not-found', blogSlug: null };
+  }
+  return { route: 'not-found', blogSlug: null };
 }
 
 function getInitialTheme(): ThemeMode {
@@ -76,9 +88,9 @@ export default function App() {
   const { isInstalled } = usePWAInstall();
   const { lang, switchToEnglish, t } = useI18n();
 
-  const [route, setRoute] = useState<AppRoute>(() =>
-    getRouteFromPath(window.location.pathname)
-  );
+  const initialParsed = parseRouteFromPath(window.location.pathname);
+  const [route, setRoute] = useState<AppRoute>(initialParsed.route);
+  const [activeBlogSlug, setActiveBlogSlug] = useState<string | null>(initialParsed.blogSlug);
   const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [view, setView] = useState<WorkspaceView>('overview');
@@ -175,14 +187,16 @@ export default function App() {
   // Sync browser back/forward navigation
   useEffect(() => {
     const onPopState = () => {
+      const parsed = parseRouteFromPath(window.location.pathname);
       setCurrentPath(window.location.pathname);
-      setRoute(getRouteFromPath(window.location.pathname));
+      setRoute(parsed.route);
+      setActiveBlogSlug(parsed.blogSlug);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // SEO Protection: apply noindex on dynamic ?domain= query URLs or 404 routes & sync canonical + OG URL
+  // SEO Protection: apply noindex on dynamic ?domain= query URLs or 404 routes & sync canonical + meta tags
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hasQueryDomain = params.has('domain') || params.has('q');
@@ -205,7 +219,16 @@ export default function App() {
       canonical.setAttribute('rel', 'canonical');
       document.head.appendChild(canonical);
     }
-    const cleanPath = route === 'home' || route === 'not-found' ? '/' : `/${route}`;
+
+    const activePost =
+      route === 'blog-post' && activeBlogSlug ? getBlogPostBySlug(activeBlogSlug) : undefined;
+
+    const cleanPath =
+      route === 'home' || route === 'not-found'
+        ? '/'
+        : route === 'blog-post' && activePost
+          ? `/blog/${activePost.slug}`
+          : `/${route}`;
     const canonicalUrl = `${window.location.origin}${cleanPath}`;
     canonical.setAttribute('href', canonicalUrl);
 
@@ -216,6 +239,10 @@ export default function App() {
       privacy: 'Privacy Policy & GDPR – DNS Locator',
       terms: 'Terms and Conditions – DNS Locator',
       disclaimer: 'Disclaimer – DNS Locator',
+      blog: 'DNS Check, IP Lookup & Network Diagnostics Blog – DNS Locator',
+      'blog-post': activePost
+        ? `${activePost.title} – DNS Locator Blog`
+        : 'DNS Locator Blog',
       'not-found': 'Page Not Found – DNS Locator',
     };
 
@@ -226,6 +253,10 @@ export default function App() {
       privacy: 'Read the DNS Locator Privacy Policy and GDPR disclosures covering DNS lookup queries, cookie consent choices, analytics, and ad settings.',
       terms: 'Review the DNS Locator Terms and Conditions governing acceptable use of our global DNS propagation checker and record diagnostic tools.',
       disclaimer: 'Read the DNS Locator Disclaimer regarding informational public DNS lookup results, registrar independence, and global cache propagation.',
+      blog: 'Explore 10 in-depth DNS Locator guides covering global dns check, ip address lookup, my isp number, tracert, find open ports, mac oui lookup, and domain QA.',
+      'blog-post': activePost
+        ? activePost.metaDescription
+        : 'Read technical guides on DNS propagation, IP address lookup, tracert diagnostics, and network verification on DNS Locator.',
       'not-found': 'The requested DNS Locator page could not be found. Return to the homepage to run a global DNS propagation or record lookup.',
     };
 
@@ -266,13 +297,19 @@ export default function App() {
     if (route !== 'not-found') {
       trackAnalyticsPageView(cleanPath, activeTitle);
     }
-  }, [route, propagationData, allRecordsData]);
+  }, [route, activeBlogSlug, propagationData, allRecordsData]);
 
-  const navigate = useCallback((nextRoute: AppRoute, hash?: string) => {
-    const nextPath = nextRoute === 'home' ? '/' : `/${nextRoute}`;
+  const navigate = useCallback((nextRoute: AppRoute, hash?: string, blogSlug?: string) => {
+    const nextPath =
+      nextRoute === 'home'
+        ? '/'
+        : nextRoute === 'blog-post' && blogSlug
+          ? `/blog/${blogSlug}`
+          : `/${nextRoute}`;
     window.history.pushState({}, '', `${nextPath}${hash ?? ''}`);
     setCurrentPath(nextPath);
     setRoute(nextRoute);
+    setActiveBlogSlug(nextRoute === 'blog-post' ? (blogSlug ?? null) : null);
     if (hash) {
       setTimeout(() => {
         const el = document.querySelector(hash);
@@ -557,6 +594,17 @@ export default function App() {
             >
               {t('navDnsGuide')}
             </button>
+            <button
+              type="button"
+              onClick={() => navigate('blog')}
+              className={`hover:text-slate-900 dark:hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                route === 'blog' || route === 'blog-post'
+                  ? 'text-sky-700 dark:text-sky-400 font-semibold'
+                  : ''
+              }`}
+            >
+              {t('navBlog')}
+            </button>
           </nav>
 
           {/* Zone 3: 1 primary action */}
@@ -618,7 +666,21 @@ export default function App() {
               }
             >
               <div className="min-w-0">
-                {route !== 'home' ? (
+                {route === 'blog' || route === 'blog-post' ? (
+                  <BlogSection
+                    activeSlug={activeBlogSlug}
+                    onNavigateHome={() => navigate('home')}
+                    onNavigateBlogIndex={() => navigate('blog')}
+                    onSelectPost={(slug) => navigate('blog-post', undefined, slug)}
+                    onRunDnsCheck={(domain, nextType) => {
+                      setRawInput(domain);
+                      setRecordType(nextType);
+                      setView('overview');
+                      navigate('home');
+                      executeLookup(domain, { targetType: nextType });
+                    }}
+                  />
+                ) : route !== 'home' ? (
                   <LegalPages
                     page={route}
                     onNavigateHome={() => navigate('home')}
@@ -650,7 +712,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={switchToEnglish}
-                      className="h-9 px-3 rounded-lg border border-sky-600 dark:border-sky-500 bg-[#0284C7] dark:bg-sky-500 text-white dark:text-slate-950 hover:bg-[#0369A1] dark:hover:bg-sky-400 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      className="h-9 px-3 rounded-lg border border-emerald-700 dark:border-emerald-400 bg-emerald-700 dark:bg-emerald-400 text-white dark:text-slate-950 hover:bg-emerald-600 dark:hover:bg-emerald-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <span>{t('englishBtn')}</span>
                     </button>
@@ -776,7 +838,7 @@ export default function App() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="flex-1 lg:flex-initial min-w-0 h-11 sm:h-15 px-3 sm:px-8 rounded-xl bg-gradient-to-r from-[#0284C7] to-cyan-600 hover:from-[#0369A1] hover:to-cyan-700 dark:from-sky-500 dark:to-cyan-400 dark:hover:from-sky-400 dark:hover:to-cyan-300 disabled:opacity-60 text-white dark:text-slate-950 text-xs sm:text-base font-bold shadow-md shadow-sky-600/20 dark:shadow-sky-500/15 inline-flex items-center justify-center gap-1.5 sm:gap-2 transition-all whitespace-nowrap cursor-pointer"
+                      className="flex-1 lg:flex-initial min-w-0 h-11 sm:h-15 px-3 sm:px-8 rounded-xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 hover:from-emerald-600 hover:via-emerald-500 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 disabled:opacity-60 text-white dark:text-slate-950 text-xs sm:text-base font-bold shadow-md shadow-emerald-700/25 dark:shadow-emerald-400/20 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/30 inline-flex items-center justify-center gap-1.5 sm:gap-2 transition-all whitespace-nowrap cursor-pointer"
                     >
                       <span>{isLoading ? t('checkingBtn') : t('lookupBtn')}</span>
                       <ArrowRight className="w-3.5 h-3.5 sm:w-5 sm:h-5 shrink-0" aria-hidden="true" />
@@ -925,28 +987,40 @@ export default function App() {
                 </button>
               </div>
 
-              {activeDomain && (
-                <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2 tabular-nums">
-                  <span className="font-mono font-semibold text-slate-800 dark:text-slate-200" dir="ltr">
-                    {activeDomain}
-                  </span>
-                  {allRecordsData && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span className="inline-flex items-center gap-1">
-                        <ShieldCheck
-                          className={`w-3.5 h-3.5 ${
-                            allRecordsData.dnssecValidated
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-slate-400 dark:text-slate-500'
-                          }`}
-                          aria-hidden="true"
-                        />
-                        <span>
-                          {allRecordsData.dnssecValidated ? t('dnssecValid') : t('dnssecUnsigned')}
-                        </span>
+              {(activeDomain || (view === 'overview' && propagationData)) && (
+                <div className="flex flex-wrap items-center gap-3">
+                  {activeDomain && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2 tabular-nums">
+                      <span className="font-mono font-semibold text-slate-800 dark:text-slate-200" dir="ltr">
+                        {activeDomain}
                       </span>
-                    </>
+                      {allRecordsData && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="inline-flex items-center gap-1">
+                            <ShieldCheck
+                              className={`w-3.5 h-3.5 ${
+                                allRecordsData.dnssecValidated
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : 'text-slate-400 dark:text-slate-500'
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span>
+                              {allRecordsData.dnssecValidated ? t('dnssecValid') : t('dnssecUnsigned')}
+                            </span>
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {view === 'overview' && propagationData && !isPropLoading && (
+                    <DownloadReportButton
+                      propagationData={propagationData}
+                      zoneData={allRecordsData}
+                      expectedValue={expectedValue}
+                    />
                   )}
                 </div>
               )}
@@ -1106,6 +1180,12 @@ export default function App() {
                   expectedValue={expectedValue}
                   onExpectedValueChange={setExpectedValue}
                 />
+
+                <DomainComparisonSection
+                  activeDomain={activeDomain}
+                  activeZoneData={allRecordsData}
+                  recentLookups={recentLookups}
+                />
               </div>
             )}
 
@@ -1137,6 +1217,12 @@ export default function App() {
 
             {/* Original Educational DNS Guide */}
             <DnsEducationGuide />
+
+            {/* Featured DNS & Network Engineering Blog Preview */}
+            <BlogPreviewStrip
+              onOpenBlogIndex={() => navigate('blog')}
+              onSelectPost={(slug) => navigate('blog-post', undefined, slug)}
+            />
                   </>
                 )}
               </div>
@@ -1172,6 +1258,13 @@ export default function App() {
             aria-label="Footer legal and policy links"
             className="flex flex-wrap items-center gap-x-5 gap-y-2 shrink-0"
           >
+            <button
+              type="button"
+              onClick={() => navigate('blog')}
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
+            >
+              {t('navBlog')}
+            </button>
             <button
               type="button"
               onClick={() => navigate('about')}

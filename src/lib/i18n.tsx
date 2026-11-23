@@ -98,6 +98,7 @@ const EN_TRANSLATIONS = {
   navOverview: 'Overview',
   navAllRecords: 'All Records',
   navDnsGuide: 'DNS Guide',
+  navBlog: 'Blog',
   navAbout: 'About',
   navContact: 'Contact',
   navPrivacy: 'Privacy Policy',

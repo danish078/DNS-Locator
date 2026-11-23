@@ -46,7 +46,7 @@ export function NotFoundTemplate({
           <button
             type="button"
             onClick={onNavigateHome}
-            className="h-10 px-5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-sm font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer"
+            className="h-10 px-5 rounded-lg bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 text-white dark:text-slate-950 text-sm font-semibold shadow-xs shadow-emerald-700/20 dark:shadow-emerald-400/15 inline-flex items-center gap-2 transition-all cursor-pointer"
           >
             <Home className="w-4 h-4" aria-hidden="true" />
             <span>Back to DNS Lookup</span>
@@ -138,7 +138,7 @@ export function GeneralErrorTemplate({
           <button
             type="button"
             onClick={onRetry ?? (() => window.location.reload())}
-            className="h-10 px-5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-sm font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer"
+            className="h-10 px-5 rounded-lg bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 text-white dark:text-slate-950 text-sm font-semibold shadow-xs shadow-emerald-700/20 dark:shadow-emerald-400/15 inline-flex items-center gap-2 transition-all cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" aria-hidden="true" />
             <span>Reload Page</span>

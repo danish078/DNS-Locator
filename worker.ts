@@ -806,6 +806,17 @@ export default {
     if (url.pathname === '/sitemap.xml') {
       const pages = [
         '/',
+        '/blog',
+        '/blog/how-to-run-a-global-dns-check-with-dns-locator',
+        '/blog/ip-address-lookup-and-ip-number-search-guide',
+        '/blog/what-is-my-isp-number-troubleshooting-local-dns-cache',
+        '/blog/using-tracert-and-dns-check-to-diagnose-routing-delays',
+        '/blog/find-open-ports-after-dns-a-record-migration',
+        '/blog/mac-address-lookup-and-mac-oui-lookup-for-network-admins',
+        '/blog/reverse-image-search-and-google-photo-lookup-for-brand-security',
+        '/blog/morse-code-translator-to-dns-packets-signal-encoding-history',
+        '/blog/hex-color-to-pantone-visual-qa-for-multi-region-dns-deployments',
+        '/blog/complete-website-launch-toolkit-dns-ip-mac-signal-and-brand-checks',
         '/about',
         '/contact',
         '/privacy',
@@ -816,7 +827,7 @@ export default {
       const urls = pages
         .map(
           (p) =>
-            `  <url>\n    <loc>${origin}${p}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p === '/' ? 'weekly' : 'monthly'}</changefreq>\n    <priority>${p === '/' ? '1.0' : '0.6'}</priority>\n  </url>`
+            `  <url>\n    <loc>${origin}${p}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p === '/' || p === '/blog' ? 'weekly' : 'monthly'}</changefreq>\n    <priority>${p === '/' ? '1.0' : p.startsWith('/blog') ? '0.8' : '0.6'}</priority>\n  </url>`
         )
         .join('\n');
       return new Response(

@@ -9,11 +9,13 @@ import {
 } from 'lucide-react';
 import { formatTtl } from '../lib/domain';
 import { useI18n } from '../lib/i18n';
+import { triggerReportDownload } from '../lib/report';
 import type {
   ContinentKey,
   PropagationResponse,
   RegionalCheckpointResult,
 } from '../types/dns';
+import GlobalHealthChart from './GlobalHealthChart';
 import WorldPropagationMap from './WorldPropagationMap';
 
 interface PropagationResultsProps {
@@ -113,47 +115,12 @@ export default function PropagationResults({
 
   const handleExportJson = () => {
     if (!data) return;
-    const normalized = {
-      ...data,
-      regions: data.regions.map((r) => ({
-        ...r,
-        statusLabel: isRegionPropagated(r, expectedValue)
-          ? 'Propagated'
-          : 'Non-Propagated',
-      })),
-    };
-    const blob = new Blob([JSON.stringify(normalized, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${data.domain}-${data.recordType}-propagation.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerReportDownload(data, expectedValue, 'json');
   };
 
   const handleExportCsv = () => {
     if (!data) return;
-    const header = ['City', 'Country', 'Continent', 'Provider', 'Status', 'Values', 'TTL', 'LatencyMs'];
-    const rows = data.regions.map((r) => [
-      r.city,
-      r.country,
-      r.continent,
-      r.provider,
-      isRegionPropagated(r, expectedValue) ? 'Propagated' : 'Non-Propagated',
-      r.answers.map((a) => (a.priority !== undefined ? `${a.priority} ${a.value}` : a.value)).join('; '),
-      r.answers[0]?.ttl ?? '',
-      String(r.latencyMs),
-    ]);
-    const csv = [header, ...rows]
-      .map((cols) => cols.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${data.domain}-${data.recordType}-propagation.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerReportDownload(data, expectedValue, 'csv');
   };
 
   return (
@@ -230,6 +197,7 @@ export default function PropagationResults({
             onSelectRegion={() => {}}
             isLoading={true}
           />
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 h-[260px] animate-pulse" />
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
             <div className="h-10 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-4 flex items-center justify-between">
               <div className="h-3.5 w-32 rounded bg-slate-200 dark:bg-slate-700" />
@@ -310,6 +278,14 @@ export default function PropagationResults({
             selectedRegionId={selectedRegionId}
             onSelectRegion={setSelectedRegionId}
             isLoading={false}
+          />
+
+          {/* D3 Global Health & Latency Distribution */}
+          <GlobalHealthChart
+            regions={data.regions}
+            expectedValue={expectedValue}
+            selectedRegionId={selectedRegionId}
+            onSelectRegion={setSelectedRegionId}
           />
 
           {/* Continent Segmented Filter */}

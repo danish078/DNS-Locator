@@ -503,7 +503,7 @@ export default function LegalPages({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="h-10 px-5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] dark:bg-sky-500 dark:hover:bg-sky-400 disabled:opacity-60 text-white dark:text-slate-950 text-sm font-semibold transition-colors cursor-pointer"
+                  className="h-10 px-5 rounded-lg bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 disabled:opacity-60 text-white dark:text-slate-950 text-sm font-semibold shadow-xs shadow-emerald-700/20 dark:shadow-emerald-400/15 transition-all cursor-pointer"
                 >
                   {submitting ? 'Sending…' : 'Send Message'}
                 </button>
