@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 import { generateAiGameDebrief, generateAiGameMission } from './server/gemini';
+import { fetchLiveDnsNews, getAndEnsureDailyBlogs } from './server/newsAndDailyBlog';
 
 dotenv.config();
 
@@ -1490,6 +1491,56 @@ async function startServer() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Unable to generate AI run debrief via Gemini.';
+      const status = message.includes('GEMINI_API_KEY') ? 503 : 502;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  // Live DNS, Routing & Network Infrastructure News Aggregator
+  app.get('/api/news', async (req: Request, res: Response) => {
+    const forceRefresh = req.query.refresh === '1';
+    try {
+      const feed = await fetchLiveDnsNews(forceRefresh);
+      return res.json(feed);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unable to load live DNS and network news.';
+      return res.status(502).json({ error: message });
+    }
+  });
+
+  // Daily Blog Posts automatically derived from today's top live news post
+  app.get('/api/daily-blogs', async (_req: Request, res: Response) => {
+    try {
+      const result = await getAndEnsureDailyBlogs();
+      return res.json(result);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unable to load daily blog posts.';
+      return res.status(500).json({ error: message, posts: [] });
+    }
+  });
+
+  // Manual trigger to generate/refresh today's daily news blog post
+  app.post('/api/daily-blogs/generate', async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const rate = dnsRateLimiter.check(ip);
+    if (!rate.allowed) {
+      return res.status(429).json({
+        error: `Rate limit exceeded. Please wait ${rate.retryAfterSeconds}s before retrying.`,
+      });
+    }
+
+    try {
+      const result = await getAndEnsureDailyBlogs({ forceRegenerateToday: true });
+      if (result.error && !result.todayAvailable) {
+        const status = result.error.includes('GEMINI_API_KEY') ? 503 : 502;
+        return res.status(status).json({ error: result.error, posts: result.posts });
+      }
+      return res.json(result);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Unable to generate daily blog post.';
       const status = message.includes('GEMINI_API_KEY') ? 503 : 502;
       return res.status(status).json({ error: message });
     }

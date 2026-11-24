@@ -263,3 +263,332 @@ Provide a punchy rankTitle (2-4 words), one concise actionable coachingTip (1-2 
         : 'Lower TTL values accelerate DNS updates globally while Anycast resolvers route users to the closest node.',
   };
 }
+
+export interface DailyNewsArticleInput {
+  id: string;
+  title: string;
+  publishedAt: string;
+  summary: string;
+  categories: string[];
+  relevance: 'dns' | 'routing' | 'security' | 'infrastructure';
+}
+
+export interface RewrittenNewsItem {
+  id: string;
+  title: string;
+  summary: string;
+  details: string;
+  categories: string[];
+  suggestedDomain?: string;
+}
+
+export interface GeneratedDailyBlogPayload {
+  slug: string;
+  title: string;
+  metaDescription: string;
+  excerpt: string;
+  category: string;
+  publishedAt: string;
+  readTimeMinutes: number;
+  keywords: string[];
+  suggestedDomain: string;
+  suggestedRecordType: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'SOA' | 'CAA';
+  sections: Array<{
+    heading: string;
+    paragraphs: string[];
+    bullets?: string[];
+    tip?: string;
+  }>;
+  isDailyBrief: true;
+}
+
+const VALID_SUGGESTED_RECORD_TYPES = new Set([
+  'A',
+  'AAAA',
+  'CNAME',
+  'MX',
+  'TXT',
+  'NS',
+  'SOA',
+  'CAA',
+]);
+
+const THIRD_PARTY_PATTERNS = [
+  /\bcloudflare(?:\s+blog)?\b/gi,
+  /\bapnic(?:\s+blog)?\b/gi,
+  /\bripe(?:\s+labs|\s+ncc)?\b/gi,
+  /\bsans(?:\s+internet\s+storm\s+center|\s+isc)?\b/gi,
+  /\bbleeping\s*computer\b/gi,
+  /\btechcrunch\b/gi,
+  /\barstechnica\b/gi,
+  /\bzdnet\b/gi,
+  /\bai[- ]generated\b/gi,
+  /\bgenerated\s+(?:by|with|via|from)\s+(?:ai|gemini|llm)\b/gi,
+];
+
+export function stripThirdPartyAndAiMentions(text: string): string {
+  let cleaned = text;
+  for (const pattern of THIRD_PARTY_PATTERNS) {
+    cleaned = cleaned.replace(pattern, 'network infrastructure');
+  }
+  return cleaned
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function slugifyTitle(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 56);
+}
+
+export async function synthesizeDnsLocatorNewsDispatches(
+  rawItems: DailyNewsArticleInput[]
+): Promise<RewrittenNewsItem[]> {
+  const ai = getGeminiClient();
+  const compactInputs = rawItems.slice(0, 12).map((item) => ({
+    id: item.id,
+    headline: item.title,
+    summary: item.summary,
+    topics: item.categories,
+    relevance: item.relevance,
+  }));
+
+  const response = await callGeminiStructured(
+    ai,
+    `Rewrite these ${compactInputs.length} current DNS, routing, and internet security news briefs as original DNS Locator Newsroom dispatches.
+
+Input items:
+${JSON.stringify(compactInputs)}
+
+Strict Rules:
+- Write exclusively as DNS Locator's technical news desk.
+- NEVER mention Cloudflare, APNIC, RIPE, SANS, BleepingComputer, or any third-party blog, publisher, or news source name.
+- NEVER include external URLs or links.
+- NEVER mention AI or automated generation.
+- Keep titles crisp (55-95 chars), summary concise (130-190 chars), and details rich (2-3 clear sentences explaining why it matters for DNS, latency, routing, or domain security).
+- Provide 2-3 clean topic tags in categories and an optional safe public domain (such as dnslocator.online, google.com, github.com, icann.org, or quad9.net) for readers to test.`,
+    {
+      systemInstruction:
+        'You are the managing editor at DNS Locator Newsroom. Produce neutral, authoritative, third-party-free DNS and internet infrastructure news briefs.',
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          items: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                title: { type: Type.STRING },
+                summary: { type: Type.STRING },
+                details: { type: Type.STRING },
+                categories: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+                suggestedDomain: { type: Type.STRING },
+              },
+              required: ['id', 'title', 'summary', 'details', 'categories'],
+            },
+          },
+        },
+        required: ['items'],
+      },
+    }
+  );
+
+  const rawText = (response.text ?? '').trim();
+  if (!rawText) {
+    throw new Error('Empty newsroom synthesis response.');
+  }
+  const parsed = JSON.parse(rawText) as { items?: RewrittenNewsItem[] };
+  return Array.isArray(parsed.items) ? parsed.items : [];
+}
+
+export async function generateDailyBlogPostFromNews(
+  article: DailyNewsArticleInput,
+  dateKey: string
+): Promise<GeneratedDailyBlogPayload> {
+  const ai = getGeminiClient();
+
+  const prompt = `Write an original, deeply practical DNS & network engineering blog post for DNS Locator inspired by today's featured infrastructure update (${dateKey}):
+
+Topic Focus: ${article.title}
+Context: ${article.summary}
+Category Hint: ${article.relevance}
+
+Strict Requirements:
+- Write in the authoritative editorial voice of DNS Locator.
+- NEVER mention any third-party news website, blog, publisher, or vendor brand name (do NOT mention Cloudflare, APNIC, RIPE, SANS, BleepingComputer, or any external source).
+- NEVER mention AI, Gemini, LLMs, or automated/generated writing anywhere in the title, excerpt, body, or keywords.
+- Include 5 to 7 relevant SEO and technical DNS keywords (e.g., "dns check", "dns propagation", "ip address lookup", "dnssec", "ttl caching", "anycast routing", plus topic-specific terms).
+- Produce 3 detailed, helpful sections with concrete paragraphs, actionable bullet checklists, and practical tips for DNS Locator users.
+- Suggest a valid public domain (e.g., dnslocator.online, google.com, github.com, or quad9.net) and recordType for readers to inspect on DNS Locator.`;
+
+  const response = await callGeminiStructured(
+    ai,
+    prompt,
+    {
+      systemInstruction:
+        'You are a senior DNS & network reliability technical writer at DNS Locator. Never mention external news sources, third-party publishers, or AI.',
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          title: {
+            type: Type.STRING,
+            description: 'Clear, authoritative technical blog headline (50-85 chars).',
+          },
+          metaDescription: {
+            type: Type.STRING,
+            description: 'SEO meta description under 160 characters.',
+          },
+          excerpt: {
+            type: Type.STRING,
+            description: 'Concise 2-sentence summary for the blog card (120-210 chars).',
+          },
+          category: {
+            type: Type.STRING,
+            description: 'Short category such as "DNS Propagation", "Routing & IPv6", "DNS Security", or "Network Diagnostics".',
+          },
+          readTimeMinutes: {
+            type: Type.INTEGER,
+            description: 'Estimated reading time in minutes (between 4 and 7).',
+          },
+          keywords: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: '5 to 7 relevant lowercase technical & SEO keywords.',
+          },
+          suggestedDomain: {
+            type: Type.STRING,
+            description: 'Clean public domain hostname (no protocol/path) to inspect on DNS Locator.',
+          },
+          suggestedRecordType: {
+            type: Type.STRING,
+            description: 'One of: A, AAAA, CNAME, MX, TXT, NS, SOA, CAA.',
+          },
+          sections: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                heading: { type: Type.STRING },
+                paragraphs: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+                bullets: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+                tip: { type: Type.STRING },
+              },
+              required: ['heading', 'paragraphs'],
+            },
+          },
+        },
+        required: [
+          'title',
+          'metaDescription',
+          'excerpt',
+          'category',
+          'readTimeMinutes',
+          'keywords',
+          'suggestedDomain',
+          'suggestedRecordType',
+          'sections',
+        ],
+      },
+    }
+  );
+
+  const rawText = (response.text ?? '').trim();
+  if (!rawText) {
+    throw new Error('Unable to compose today’s daily blog post.');
+  }
+
+  const parsed = JSON.parse(rawText) as Partial<GeneratedDailyBlogPayload>;
+  const rawTitle =
+    typeof parsed.title === 'string' && parsed.title.trim()
+      ? parsed.title.trim().slice(0, 120)
+      : `Daily DNS & Network Engineering Brief (${dateKey})`;
+  const title = stripThirdPartyAndAiMentions(rawTitle);
+
+  const cleanedDomain =
+    typeof parsed.suggestedDomain === 'string' &&
+    /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(parsed.suggestedDomain.trim()) &&
+    !/cloudflare|apnic|ripe|bleepingcomputer|sans\.edu/i.test(parsed.suggestedDomain)
+      ? parsed.suggestedDomain.trim().toLowerCase()
+      : 'www.dnslocator.online';
+
+  const rawType = typeof parsed.suggestedRecordType === 'string' ? parsed.suggestedRecordType.toUpperCase().trim() : 'A';
+  const suggestedRecordType = (
+    VALID_SUGGESTED_RECORD_TYPES.has(rawType) ? rawType : 'A'
+  ) as GeneratedDailyBlogPayload['suggestedRecordType'];
+
+  const rawSections = Array.isArray(parsed.sections) ? parsed.sections : [];
+  const sections = rawSections
+    .filter((s) => s && typeof s.heading === 'string' && Array.isArray(s.paragraphs) && s.paragraphs.length > 0)
+    .slice(0, 4)
+    .map((s) => ({
+      heading: stripThirdPartyAndAiMentions(s.heading),
+      paragraphs: s.paragraphs
+        .filter((p) => typeof p === 'string' && p.trim().length > 0)
+        .map((p) => stripThirdPartyAndAiMentions(p)),
+      bullets: Array.isArray(s.bullets)
+        ? s.bullets
+            .filter((b) => typeof b === 'string' && b.trim().length > 0)
+            .map((b) => stripThirdPartyAndAiMentions(b))
+            .slice(0, 5)
+        : undefined,
+      tip: typeof s.tip === 'string' && s.tip.trim() ? stripThirdPartyAndAiMentions(s.tip) : undefined,
+    }));
+
+  if (sections.length === 0) {
+    throw new Error('Daily blog post returned no readable sections.');
+  }
+
+  const slugBase = slugifyTitle(title) || 'dns-locator-daily-brief';
+  const keywords = Array.isArray(parsed.keywords)
+    ? parsed.keywords
+        .filter((k) => typeof k === 'string' && k.trim().length > 0)
+        .map((k) => stripThirdPartyAndAiMentions(k).toLowerCase())
+        .filter((k) => k.length > 1 && !/\b(ai|gemini)\b/.test(k))
+        .slice(0, 7)
+    : ['dns check', 'dns propagation', 'ip address lookup', 'ttl', 'routing'];
+
+  return {
+    slug: `daily-${dateKey}-${slugBase}`,
+    title,
+    metaDescription: stripThirdPartyAndAiMentions(
+      typeof parsed.metaDescription === 'string' && parsed.metaDescription.trim()
+        ? parsed.metaDescription.trim().slice(0, 165)
+        : article.summary.slice(0, 155)
+    ),
+    excerpt: stripThirdPartyAndAiMentions(
+      typeof parsed.excerpt === 'string' && parsed.excerpt.trim()
+        ? parsed.excerpt.trim().slice(0, 260)
+        : article.summary.slice(0, 220)
+    ),
+    category: stripThirdPartyAndAiMentions(
+      typeof parsed.category === 'string' && parsed.category.trim()
+        ? parsed.category.trim().slice(0, 40)
+        : 'DNS Propagation'
+    ),
+    publishedAt: dateKey,
+    readTimeMinutes: Math.round(clamp(Number(parsed.readTimeMinutes), 4, 7)),
+    keywords: keywords.length >= 3 ? keywords : ['dns check', 'dns propagation', 'ip address lookup', 'network diagnostics'],
+    suggestedDomain: cleanedDomain,
+    suggestedRecordType,
+    sections,
+    isDailyBrief: true,
+  };
+}

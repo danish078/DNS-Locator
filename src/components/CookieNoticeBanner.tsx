@@ -80,12 +80,12 @@ export default function CookieNoticeBanner({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/55 backdrop-blur-[2px] p-4">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-950/55 backdrop-blur-[2px] p-4 overflow-y-auto">
       <aside
         role="dialog"
         aria-modal="true"
         aria-labelledby="cookie-acceptance-title"
-        className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:p-6 space-y-4"
+        className="my-auto w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:p-6 space-y-4"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">

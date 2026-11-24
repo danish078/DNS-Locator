@@ -15,6 +15,25 @@
     <meta name="apple-mobile-web-app-title" content="DNS Locator" />
     <script>
       (function () {
+        window.addEventListener(
+          'error',
+          function (event) {
+            var filename = typeof event.filename === 'string' ? event.filename : '';
+            var stack = event.error && typeof event.error.stack === 'string' ? event.error.stack : '';
+            if (
+              filename.indexOf('chrome-extension://') === 0 ||
+              filename.indexOf('moz-extension://') === 0 ||
+              filename.indexOf('safari-extension://') === 0 ||
+              stack.indexOf('chrome-extension://') !== -1 ||
+              stack.indexOf('moz-extension://') !== -1
+            ) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            }
+          },
+          true
+        );
+
         try {
           var saved = localStorage.getItem('dnslocator_theme');
           var dark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);

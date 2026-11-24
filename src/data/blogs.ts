@@ -19,6 +19,7 @@ export interface BlogPost {
   suggestedDomain: string;
   suggestedRecordType: DnsRecordType;
   sections: BlogArticleSection[];
+  isDailyBrief?: boolean;
 }
 
 export const BLOG_POSTS: BlogPost[] = [

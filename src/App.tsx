@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import AdSlotWrapper from './components/AdSlotWrapper';
 import AllRecordsResults from './components/AllRecordsResults';
-import BlogSection, { BlogPreviewStrip } from './components/BlogSection';
+import BlogSection from './components/BlogSection';
 import CookieNoticeBanner, { getSavedCookieConsent } from './components/CookieNoticeBanner';
 import DnsEducationGuide from './components/DnsEducationGuide';
 import DnsPacketGame from './components/DnsPacketGame';
@@ -29,11 +29,12 @@ import DownloadReportButton from './components/DownloadReportButton';
 import GlobalHealthChart from './components/GlobalHealthChart';
 import InteractiveLogo3D from './components/InteractiveLogo3D';
 import LegalPages, { type LegalPageRoute } from './components/LegalPages';
+import NewsSection from './components/NewsSection';
 import OfflineIndicator from './components/OfflineIndicator';
 import PropagationResults from './components/PropagationResults';
 import PWAInstallButton from './components/PWAInstallButton';
 import { NotFoundTemplate } from './components/StatusTemplates';
-import { getBlogPostBySlug } from './data/blogs';
+import { getBlogPostBySlug, type BlogPost } from './data/blogs';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import {
   initializeTracking,
@@ -58,8 +59,9 @@ import {
   type DnsRecordType,
   type PropagationResponse,
 } from './types/dns';
+import type { NewsFeedResponse } from './types/news';
 
-type AppRoute = 'home' | LegalPageRoute | 'blog' | 'blog-post' | 'not-found';
+type AppRoute = 'home' | LegalPageRoute | 'news' | 'blog' | 'blog-post' | 'not-found';
 type WorkspaceView = 'overview' | 'all' | 'regions';
 type ThemeMode = 'light' | 'dark';
 
@@ -71,10 +73,11 @@ function parseRouteFromPath(pathname: string): { route: AppRoute; blogSlug: stri
   if (clean === '/privacy') return { route: 'privacy', blogSlug: null };
   if (clean === '/terms') return { route: 'terms', blogSlug: null };
   if (clean === '/disclaimer') return { route: 'disclaimer', blogSlug: null };
+  if (clean === '/news') return { route: 'news', blogSlug: null };
   if (clean === '/blog') return { route: 'blog', blogSlug: null };
   if (clean.startsWith('/blog/')) {
     const slug = clean.slice('/blog/'.length);
-    if (slug && getBlogPostBySlug(slug)) {
+    if (slug && (getBlogPostBySlug(slug) || slug.startsWith('daily-'))) {
       return { route: 'blog-post', blogSlug: slug };
     }
     return { route: 'not-found', blogSlug: null };
@@ -123,6 +126,14 @@ export default function App() {
   );
   const [hasTriggeredLookup, setHasTriggeredLookup] = useState(false);
   const [isGameBarOpen, setIsGameBarOpen] = useState(false);
+
+  const [newsFeed, setNewsFeed] = useState<NewsFeedResponse | null>(null);
+  const [isNewsLoading, setIsNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState<string | null>(null);
+
+  const [dailyPosts, setDailyPosts] = useState<BlogPost[]>([]);
+  const [isDailyLoading, setIsDailyLoading] = useState(false);
+  const [dailyError, setDailyError] = useState<string | null>(null);
 
   const debounceTimerRef = useRef<number | null>(null);
   const domainInputRef = useRef<HTMLInputElement | null>(null);
@@ -229,14 +240,18 @@ export default function App() {
     }
 
     const activePost =
-      route === 'blog-post' && activeBlogSlug ? getBlogPostBySlug(activeBlogSlug) : undefined;
+      route === 'blog-post' && activeBlogSlug
+        ? dailyPosts.find((p) => p.slug === activeBlogSlug) ?? getBlogPostBySlug(activeBlogSlug)
+        : undefined;
 
     const cleanPath =
       route === 'home' || route === 'not-found'
         ? '/'
         : route === 'blog-post' && activePost
           ? `/blog/${activePost.slug}`
-          : `/${route}`;
+          : route === 'blog-post' && activeBlogSlug
+            ? `/blog/${activeBlogSlug}`
+            : `/${route}`;
     const canonicalUrl = `${window.location.origin}${cleanPath}`;
     canonical.setAttribute('href', canonicalUrl);
 
@@ -247,7 +262,8 @@ export default function App() {
       privacy: 'Privacy Policy & GDPR – DNS Locator',
       terms: 'Terms and Conditions – DNS Locator',
       disclaimer: 'Disclaimer – DNS Locator',
-      blog: 'DNS Check, IP Lookup & Network Diagnostics Blog – DNS Locator',
+      news: 'Live DNS & Network Infrastructure News – DNS Locator',
+      blog: 'Daily DNS Briefings & Network Engineering Blog – DNS Locator',
       'blog-post': activePost
         ? `${activePost.title} – DNS Locator Blog`
         : 'DNS Locator Blog',
@@ -261,7 +277,8 @@ export default function App() {
       privacy: 'Read the DNS Locator Privacy Policy and GDPR disclosures covering DNS lookup queries, cookie consent choices, analytics, and ad settings.',
       terms: 'Review the DNS Locator Terms and Conditions governing acceptable use of our global DNS propagation checker and record diagnostic tools.',
       disclaimer: 'Read the DNS Locator Disclaimer regarding informational public DNS lookup results, registrar independence, and global cache propagation.',
-      blog: 'Explore 10 in-depth DNS Locator guides covering global dns check, ip address lookup, my isp number, tracert, find open ports, mac oui lookup, and domain QA.',
+      news: 'Read DNS Locator network, DNS resolution, BGP routing, IPv6, and security updates.',
+      blog: 'Explore daily DNS Locator engineering briefings and deep-dive technical guides covering global dns check, ip lookup, tracert, and domain QA.',
       'blog-post': activePost
         ? activePost.metaDescription
         : 'Read technical guides on DNS propagation, IP address lookup, tracert diagnostics, and network verification on DNS Locator.',
@@ -305,7 +322,7 @@ export default function App() {
     if (route !== 'not-found') {
       trackAnalyticsPageView(cleanPath, activeTitle);
     }
-  }, [route, activeBlogSlug, propagationData, allRecordsData]);
+  }, [route, activeBlogSlug, dailyPosts, propagationData, allRecordsData]);
 
   const navigate = useCallback((nextRoute: AppRoute, hash?: string, blogSlug?: string) => {
     const nextPath =
@@ -425,8 +442,8 @@ export default function App() {
         return;
       }
 
+      setHasTriggeredLookup(true);
       if (opts?.revealGame) {
-        setHasTriggeredLookup(true);
         setIsGameBarOpen(true);
       }
 
@@ -456,6 +473,57 @@ export default function App() {
     },
     [recordType, rawInput, allRecordsData?.domain, fetchPropagation, fetchAllRecords]
   );
+
+  const fetchNews = useCallback(async (forceRefresh = false) => {
+    setIsNewsLoading(true);
+    setNewsError(null);
+    try {
+      const res = await fetch(`/api/news${forceRefresh ? '?refresh=1' : ''}`);
+      const json = await res.json();
+      if (!res.ok) {
+        setNewsError(json.error || `Unable to load live news (HTTP ${res.status}).`);
+        return;
+      }
+      setNewsFeed(json as NewsFeedResponse);
+    } catch {
+      setNewsError('Unable to reach the live news service. Please check your connection and retry.');
+    } finally {
+      setIsNewsLoading(false);
+    }
+  }, []);
+
+  const fetchDailyBlogs = useCallback(async (forceRegenerate = false) => {
+    setIsDailyLoading(true);
+    setDailyError(null);
+    try {
+      const res = await fetch(
+        forceRegenerate ? '/api/daily-blogs/generate' : '/api/daily-blogs',
+        forceRegenerate ? { method: 'POST' } : undefined
+      );
+      const json = (await res.json()) as {
+        posts?: BlogPost[];
+        error?: string;
+      };
+      if (Array.isArray(json.posts)) {
+        setDailyPosts(json.posts);
+      }
+      if (!res.ok || json.error) {
+        setDailyError(
+          json.error || `Unable to load today’s DNS Locator briefing (HTTP ${res.status}).`
+        );
+      }
+    } catch {
+      setDailyError('Unable to reach DNS Locator blog service.');
+    } finally {
+      setIsDailyLoading(false);
+    }
+  }, []);
+
+  // Load DNS Locator news updates & daily briefing on startup
+  useEffect(() => {
+    fetchNews();
+    fetchDailyBlogs();
+  }, [fetchNews, fetchDailyBlogs]);
 
   // Support optional ?domain= deep links on initial mount
   useEffect(() => {
@@ -562,10 +630,10 @@ export default function App() {
             </a>
           </div>
 
-          {/* Zone 2: Concise navigation links (legal pages moved to footer) */}
+          {/* Zone 2: Concise navigation links (desktop) */}
           <nav
             aria-label="Primary navigation"
-            className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300"
+            className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300"
           >
             <button
               type="button"
@@ -574,40 +642,30 @@ export default function App() {
                 setView('overview');
               }}
               className={`hover:text-slate-900 dark:hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                route === 'home' && view === 'overview'
-                  ? 'text-sky-700 dark:text-sky-400 font-semibold'
+                route === 'home'
+                  ? 'text-emerald-700 dark:text-emerald-300 font-semibold'
                   : ''
               }`}
             >
-              {t('navOverview')}
+              {t('navLookup')}
             </button>
             <button
               type="button"
-              onClick={() => {
-                navigate('home');
-                setView('all');
-              }}
+              onClick={() => navigate('news')}
               className={`hover:text-slate-900 dark:hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                route === 'home' && view === 'all'
-                  ? 'text-sky-700 dark:text-sky-400 font-semibold'
+                route === 'news'
+                  ? 'text-emerald-700 dark:text-emerald-300 font-semibold'
                   : ''
               }`}
             >
-              {t('navAllRecords')}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('home', '#dns-guide')}
-              className="hover:text-slate-900 dark:hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              {t('navDnsGuide')}
+              {t('navNews')}
             </button>
             <button
               type="button"
               onClick={() => navigate('blog')}
               className={`hover:text-slate-900 dark:hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 route === 'blog' || route === 'blog-post'
-                  ? 'text-sky-700 dark:text-sky-400 font-semibold'
+                  ? 'text-emerald-700 dark:text-emerald-300 font-semibold'
                   : ''
               }`}
             >
@@ -623,7 +681,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleClearCache}
-                className="h-9 px-3.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                className="h-9 px-3.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                 <span>{t('clearCache')}</span>
@@ -631,6 +689,45 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {/* Mobile navigation strip for direct access to Lookup, News & Blog */}
+        <nav
+          aria-label="Mobile navigation"
+          className="md:hidden border-t border-slate-100 dark:border-slate-800/80 px-4 h-10 flex items-center gap-6 text-xs font-medium text-slate-600 dark:text-slate-300 overflow-x-auto"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              navigate('home');
+              setView('overview');
+            }}
+            className={`whitespace-nowrap shrink-0 cursor-pointer ${
+              route === 'home' ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : ''
+            }`}
+          >
+            {t('navLookup')}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('news')}
+            className={`whitespace-nowrap shrink-0 cursor-pointer ${
+              route === 'news' ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : ''
+            }`}
+          >
+            {t('navNews')}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('blog')}
+            className={`whitespace-nowrap shrink-0 cursor-pointer ${
+              route === 'blog' || route === 'blog-post'
+                ? 'text-emerald-700 dark:text-emerald-300 font-semibold'
+                : ''
+            }`}
+          >
+            {t('navBlog')}
+          </button>
+        </nav>
       </header>
 
       {/* Main Content + AdSense-Ready Responsive Shell */}
@@ -674,9 +771,27 @@ export default function App() {
               }
             >
               <div className="min-w-0">
-                {route === 'blog' || route === 'blog-post' ? (
+                {route === 'news' ? (
+                  <NewsSection
+                    feed={newsFeed}
+                    isLoading={isNewsLoading}
+                    error={newsError}
+                    onRefresh={() => fetchNews(true)}
+                    onNavigateHome={() => navigate('home')}
+                    onRunDnsCheck={(domain, nextType) => {
+                      setRawInput(domain);
+                      setRecordType(nextType);
+                      setView('overview');
+                      navigate('home');
+                      executeLookup(domain, { targetType: nextType });
+                    }}
+                  />
+                ) : route === 'blog' || route === 'blog-post' ? (
                   <BlogSection
                     activeSlug={activeBlogSlug}
+                    dailyPosts={dailyPosts}
+                    isDailyLoading={isDailyLoading}
+                    dailyError={dailyError}
                     onNavigateHome={() => navigate('home')}
                     onNavigateBlogIndex={() => navigate('blog')}
                     onSelectPost={(slug) => navigate('blog-post', undefined, slug)}
@@ -884,30 +999,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Quick Try Example Domains for instant accessible lookups */}
-                <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400" dir="ltr">
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">
-                    Quick try:
-                  </span>
-                  {(['cloudflare.com', 'google.com', 'github.com', 'openai.com'] as const).map(
-                    (sample) => (
-                      <button
-                        key={sample}
-                        type="button"
-                        onClick={() => handleQuickDomain(sample)}
-                        className={`px-3.5 py-1.5 min-h-[36px] rounded-lg border font-mono text-xs transition-all cursor-pointer active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 ${
-                          activeDomain === sample
-                            ? 'border-sky-400 dark:border-sky-600 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 font-semibold'
-                            : 'border-slate-200/90 dark:border-slate-700/80 bg-white/85 dark:bg-slate-950/75 text-slate-700 dark:text-slate-200 hover:border-sky-400 dark:hover:border-sky-500 hover:text-sky-700 dark:hover:text-sky-300'
-                        }`}
-                      >
-                        {sample}
-                      </button>
-                    )
-                  )}
-                </div>
-
-                {/* Recent Searches Bar (in place of record strip) & Live Hostname Sanitization */}
+                {/* Recent Searches Bar & Permanent Play Game Button */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pt-5 border-t border-slate-200/70 dark:border-slate-800/80 text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[42px]">
                   <div className="flex flex-wrap items-center gap-2.5 min-w-0">
                     <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200 shrink-0">
@@ -946,56 +1038,59 @@ export default function App() {
                     )}
                   </div>
 
-                  {((rawInput.trim() && sanitizedPreview.wasModified && sanitizedPreview.isValid) ||
-                    (sanitizedPreview.isValid &&
-                      sanitizedPreview.apexDomain !== sanitizedPreview.domain) ||
-                    hasTriggeredLookup) && (
-                    <div className="flex flex-wrap items-center justify-end gap-x-3.5 gap-y-2 shrink-0 sm:ml-auto text-xs sm:text-sm">
-                      {rawInput.trim() &&
-                        sanitizedPreview.wasModified &&
-                        sanitizedPreview.isValid && (
-                          <span>
-                            {t('hostnameLabel')}{' '}
-                            <strong className="font-mono text-slate-800 dark:text-slate-200" dir="ltr">
-                              {sanitizedPreview.domain}
-                            </strong>
-                          </span>
-                        )}
+                  <div className="flex flex-wrap items-center justify-end gap-x-3.5 gap-y-2 shrink-0 sm:ml-auto text-xs sm:text-sm">
+                    {rawInput.trim() &&
+                      sanitizedPreview.wasModified &&
+                      sanitizedPreview.isValid && (
+                        <span>
+                          {t('hostnameLabel')}{' '}
+                          <strong className="font-mono text-slate-800 dark:text-slate-200" dir="ltr">
+                            {sanitizedPreview.domain}
+                          </strong>
+                        </span>
+                      )}
 
-                      {sanitizedPreview.isValid &&
-                        sanitizedPreview.apexDomain !== sanitizedPreview.domain && (
-                          <button
-                            type="button"
-                            onClick={() => handleQuickDomain(sanitizedPreview.apexDomain)}
-                            className="text-sky-700 dark:text-sky-400 hover:underline font-medium cursor-pointer"
-                          >
-                            {t('checkApex')} ({sanitizedPreview.apexDomain})
-                          </button>
-                        )}
-
-                      {hasTriggeredLookup && (
+                    {sanitizedPreview.isValid &&
+                      sanitizedPreview.apexDomain !== sanitizedPreview.domain && (
                         <button
                           type="button"
-                          onClick={() => setIsGameBarOpen((prev) => !prev)}
-                          aria-expanded={isGameBarOpen}
-                          aria-controls="dns-packet-game-bar"
-                          className={`min-h-[36px] px-3.5 py-1.5 rounded-lg border text-xs font-semibold inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${
-                            isGameBarOpen
-                              ? 'border-emerald-300 dark:border-emerald-700/70 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-emerald-400 dark:hover:border-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-300'
-                          }`}
+                          onClick={() => handleQuickDomain(sanitizedPreview.apexDomain)}
+                          className="text-sky-700 dark:text-sky-400 hover:underline font-medium cursor-pointer"
                         >
-                          <Gamepad2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                          <span>{isGameBarOpen ? 'Hide Game' : 'Play Game'}</span>
+                          {t('checkApex')} ({sanitizedPreview.apexDomain})
                         </button>
                       )}
-                    </div>
-                  )}
+
+                    <button
+                      type="button"
+                      onClick={() => setIsGameBarOpen((prev) => !prev)}
+                      aria-expanded={isGameBarOpen}
+                      aria-controls="dns-packet-game-bar"
+                      className={`min-h-[36px] px-3.5 py-1.5 rounded-lg border text-xs font-semibold inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${
+                        isGameBarOpen
+                          ? 'border-emerald-300 dark:border-emerald-700/70 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-emerald-400 dark:hover:border-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-300'
+                      }`}
+                    >
+                      <Gamepad2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      <span>{isGameBarOpen ? 'Hide Game' : 'Play Game'}</span>
+                    </button>
+                  </div>
                 </div>
               </form>
 
-              {/* Interactive Mini-Game revealed only after submitting a valid Lookup */}
-              {hasTriggeredLookup && isGameBarOpen && (
+              {/* Inline validation notice when search input is rejected before lower workspace opens */}
+              {inputError && !hasTriggeredLookup && !activeDomain && !isLoading && (
+                <div
+                  role="alert"
+                  className="mt-4 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/35 px-4 py-3 text-xs sm:text-sm text-rose-800 dark:text-rose-200"
+                >
+                  {inputError}
+                </div>
+              )}
+
+              {/* Interactive Mini-Game available permanently via Play Game button */}
+              {isGameBarOpen && (
                 <div className="mt-5">
                   <DnsPacketGame
                     isSearchingDns={isLoading}
@@ -1006,6 +1101,9 @@ export default function App() {
               )}
             </section>
 
+            {/* Lower Diagnostic Workspace: revealed after visitor searches a domain */}
+            {(hasTriggeredLookup || isLoading || Boolean(activeDomain)) && (
+              <>
             {/* Unified Workspace View Tabs */}
             <div className="mb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div
@@ -1307,12 +1405,8 @@ export default function App() {
 
             {/* Original Educational DNS Guide */}
             <DnsEducationGuide />
-
-            {/* Featured DNS & Network Engineering Blog Preview */}
-            <BlogPreviewStrip
-              onOpenBlogIndex={() => navigate('blog')}
-              onSelectPost={(slug) => navigate('blog-post', undefined, slug)}
-            />
+              </>
+            )}
                   </>
                 )}
               </div>
@@ -1348,6 +1442,13 @@ export default function App() {
             aria-label="Footer legal and policy links"
             className="flex flex-wrap items-center gap-x-5 gap-y-2 shrink-0"
           >
+            <button
+              type="button"
+              onClick={() => navigate('news')}
+              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap cursor-pointer"
+            >
+              {t('navNews')}
+            </button>
             <button
               type="button"
               onClick={() => navigate('blog')}
