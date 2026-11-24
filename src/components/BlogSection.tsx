@@ -142,8 +142,8 @@ export default function BlogSection({
         </div>
 
         {/* Search & Category Filter */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col gap-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="relative w-full md:max-w-md">
             <Search
               className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
               aria-hidden="true"

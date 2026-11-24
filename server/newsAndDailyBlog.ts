@@ -6,7 +6,7 @@ import {
   stripThirdPartyAndAiMentions,
   synthesizeDnsLocatorNewsDispatches,
   type GeneratedDailyBlogPayload,
-} from './gemini';
+} from './gemini.ts';
 
 export type NewsRelevance = 'dns' | 'routing' | 'security' | 'infrastructure';
 
@@ -508,6 +508,90 @@ function writeStoredDailyBlogs(posts: GeneratedDailyBlogPayload[]): void {
 
 let lastDailyError: string | undefined;
 
+function composeFallbackDailyBlogFromNews(
+  article: ServerNewsArticle,
+  dateKey: string
+): GeneratedDailyBlogPayload {
+  const cleanTitle = stripThirdPartyAndAiMentions(article.title);
+  const slugBase = cleanTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 56) || 'dns-locator-daily-brief';
+
+  const categoryMap: Record<NewsRelevance, string> = {
+    dns: 'DNS Propagation',
+    routing: 'Routing & IPv6',
+    security: 'DNS Security',
+    infrastructure: 'Network Diagnostics',
+  };
+
+  const recordTypeMap: Record<NewsRelevance, GeneratedDailyBlogPayload['suggestedRecordType']> = {
+    dns: 'NS',
+    routing: 'AAAA',
+    security: 'TXT',
+    infrastructure: 'A',
+  };
+
+  const keywordPool: Record<NewsRelevance, string[]> = {
+    dns: ['dns check', 'dns propagation', 'ttl caching', 'nameserver audit', 'dnssec', 'anycast routing'],
+    routing: ['dns check', 'ip address lookup', 'anycast routing', 'ipv6 adoption', 'bgp stability', 'latency audit'],
+    security: ['dns security', 'dnssec', 'dmarc verification', 'spf records', 'dns check', 'zone integrity'],
+    infrastructure: ['dns propagation', 'edge latency', 'resolver health', 'dns check', 'ttl strategy', 'network diagnostics'],
+  };
+
+  const cleanSummary = stripThirdPartyAndAiMentions(article.summary);
+  const cleanDetails = stripThirdPartyAndAiMentions(article.details || article.summary);
+
+  return {
+    slug: `daily-${dateKey}-${slugBase}`,
+    title: cleanTitle.length >= 24 ? cleanTitle : `DNS Locator Daily Brief: ${cleanTitle}`,
+    metaDescription: cleanSummary.slice(0, 158),
+    excerpt: cleanSummary.slice(0, 210),
+    category: categoryMap[article.relevance],
+    publishedAt: dateKey,
+    readTimeMinutes: 5,
+    keywords: keywordPool[article.relevance],
+    suggestedDomain: article.suggestedDomain || 'www.dnslocator.online',
+    suggestedRecordType: recordTypeMap[article.relevance],
+    isDailyBrief: true,
+    sections: [
+      {
+        heading: 'What Changed Across Global DNS & Network Paths',
+        paragraphs: [
+          cleanSummary,
+          cleanDetails,
+        ],
+        bullets: [
+          'Compare authoritative DNS answers across North America, Europe, Asia-Pacific, and Oceania checkpoints.',
+          'Monitor resolver latency variance and Time to Live (TTL) expiration curves during active network changes.',
+          'Validate IPv4 (A) and IPv6 (AAAA) dual-stack consistency before routing production traffic.',
+        ],
+        tip: 'Run a fresh multi-region lookup on DNS Locator immediately after updating DNS zone records to confirm consensus across all 18 checkpoints.',
+      },
+      {
+        heading: 'Operational Checklist for Domain & Infrastructure Teams',
+        paragraphs: [
+          'Consistent zone configuration reduces resolution delays and prevents partial regional outages when recursive resolvers refresh cached answers.',
+          'Teams managing multi-region deployments should audit both primary authoritative records and supporting security policies such as DNSSEC, SPF, and DMARC.',
+        ],
+        bullets: [
+          'Lower record TTL values to 300 seconds ahead of scheduled migrations or failover tests.',
+          'Inspect SOA serial alignment and NS delegation consistency across secondary nameservers.',
+          'Use domain comparison audits to catch stale CNAME or TXT entries across staging and production zones.',
+        ],
+      },
+      {
+        heading: 'Verifying Propagation & Latency in Real Time',
+        paragraphs: [
+          'Continuous checkpoint visibility helps engineers distinguish between localized ISP caching delays and upstream authoritative misconfigurations.',
+          'By pairing propagation checks with latency distribution reviews, operators can verify fast, uniform DNS resolution for global visitors.',
+        ],
+      },
+    ],
+  };
+}
+
 export async function getAndEnsureDailyBlogs(options?: {
   forceRegenerateToday?: boolean;
 }): Promise<{
@@ -537,7 +621,12 @@ export async function getAndEnsureDailyBlogs(options?: {
             throw new Error('No current DNS updates available for today’s daily briefing.');
           }
 
-          const generated = await generateDailyBlogPostFromNews(preferredArticle, todayDate);
+          let generated: GeneratedDailyBlogPayload;
+          try {
+            generated = await generateDailyBlogPostFromNews(preferredArticle, todayDate);
+          } catch {
+            generated = composeFallbackDailyBlogFromNews(preferredArticle, todayDate);
+          }
           const existingOtherDays = readStoredDailyBlogs().filter(
             (p) => p.publishedAt !== todayDate && p.slug !== generated.slug
           );

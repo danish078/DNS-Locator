@@ -50,6 +50,7 @@ interface WorkerEnv {
     fetch(request: Request): Promise<Response>;
   };
   APP_URL?: string;
+  GEMINI_API_KEY?: string;
 }
 
 const ALL_ZONE_TYPES: DnsRecordType[] = [
@@ -781,10 +782,433 @@ function mapCountryToLang(countryCode: string | null | undefined): RegionalLangC
   return COUNTRY_TO_REGIONAL_LANG[countryCode.trim().toUpperCase()] ?? 'en';
 }
 
+type WorkerNewsRelevance = 'dns' | 'routing' | 'security' | 'infrastructure';
+
+interface WorkerNewsArticle {
+  id: string;
+  title: string;
+  publisher: 'DNS Locator';
+  publishedAt: string;
+  summary: string;
+  details: string;
+  categories: string[];
+  relevance: WorkerNewsRelevance;
+  suggestedDomain: string;
+}
+
+interface WorkerDailyBlogPost {
+  slug: string;
+  title: string;
+  metaDescription: string;
+  excerpt: string;
+  category: string;
+  publishedAt: string;
+  readTimeMinutes: number;
+  keywords: string[];
+  suggestedDomain: string;
+  suggestedRecordType: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'SOA' | 'CAA';
+  sections: Array<{
+    heading: string;
+    paragraphs: string[];
+    bullets?: string[];
+    tip?: string;
+  }>;
+  isDailyBrief: true;
+}
+
+const WORKER_PRIVATE_FEEDS: Array<{ feedUrl: string; defaultRelevance: WorkerNewsRelevance }> = [
+  { feedUrl: 'https://blog.apnic.net/feed/', defaultRelevance: 'routing' },
+  { feedUrl: 'https://labs.ripe.net/rss/', defaultRelevance: 'dns' },
+  { feedUrl: 'https://blog.cloudflare.com/rss/', defaultRelevance: 'infrastructure' },
+  { feedUrl: 'https://isc.sans.edu/rssfeed.xml', defaultRelevance: 'security' },
+  { feedUrl: 'https://www.bleepingcomputer.com/feed/', defaultRelevance: 'security' },
+];
+
+const WORKER_THIRD_PARTY_PATTERNS: Array<[RegExp, string]> = [
+  [/\bat\s+cloudflare\b/gi, 'at global edge networks'],
+  [/\bfrom\s+cloudflare(?:\s+blog)?\b/gi, 'across global edge infrastructure'],
+  [/\bcloudflare(?:'s)?(?:\s+blog)?\b/gi, 'edge network'],
+  [/\bapnic(?:'s)?(?:\s+blog)?\b/gi, 'regional internet registry'],
+  [/\bripe(?:'s)?(?:\s+labs|\s+ncc)?\b/gi, 'internet measurement'],
+  [/\bsans(?:\s+internet\s+storm\s+center|\s+isc)?\b/gi, 'threat intelligence'],
+  [/\bbleeping\s*computer\b/gi, 'security advisory'],
+  [/\btechcrunch\b/gi, 'industry reports'],
+  [/\barstechnica\b/gi, 'industry reports'],
+  [/\bzdnet\b/gi, 'industry reports'],
+  [/\bai[- ]generated\b/gi, 'editorial'],
+  [/\bgenerated\s+(?:by|with|via|from)\s+(?:ai|gemini|llm)\b/gi, 'compiled by DNS Locator'],
+];
+
+function cleanWorkerText(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of WORKER_THIRD_PARTY_PATTERNS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\bThe post\b[\s\S]*?\bappeared first on\b[\s\S]*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function decodeWorkerHtml(input: string): string {
+  const named: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&apos;': "'",
+    '&#39;': "'",
+    '&nbsp;': ' ',
+    '&ndash;': '–',
+    '&mdash;': '—',
+    '&lsquo;': '‘',
+    '&rsquo;': '’',
+    '&ldquo;': '“',
+    '&rdquo;': '”',
+    '&hellip;': '…',
+  };
+  return input
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+    })
+    .replace(/&#([0-9]+);/g, (_m, dec) => {
+      const code = Number.parseInt(dec, 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+    })
+    .replace(
+      /&(amp|lt|gt|quot|apos|#39|nbsp|ndash|mdash|lsquo|rsquo|ldquo|rdquo|hellip);/g,
+      (m) => named[m] ?? m
+    );
+}
+
+function stripWorkerHtml(raw: string, maxLen = 240): string {
+  const plain = cleanWorkerText(
+    decodeWorkerHtml(raw)
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+  if (plain.length <= maxLen) return plain;
+  const slice = plain.slice(0, maxLen);
+  const lastSpace = slice.lastIndexOf(' ');
+  return `${(lastSpace > 80 ? slice.slice(0, lastSpace) : slice).trim()}…`;
+}
+
+function extractWorkerTag(block: string, tagNames: string[]): string {
+  for (const tag of tagNames) {
+    const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`<${escaped}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escaped}>`, 'i');
+    const match = block.match(regex);
+    if (match && match[1]) return match[1].trim();
+  }
+  return '';
+}
+
+function extractWorkerCategories(block: string): string[] {
+  const cats: string[] = [];
+  const rssRegex = /<category(?:\s+term="([^"]+)"[^>]*)?(?:\s[^>]*)?>([\s\S]*?)<\/category>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = rssRegex.exec(block)) !== null) {
+    const clean = stripWorkerHtml((m[1] || m[2] || '').trim(), 36);
+    if (clean && !cats.includes(clean)) cats.push(clean);
+  }
+  return cats.slice(0, 4);
+}
+
+function classifyWorkerRelevance(
+  title: string,
+  summary: string,
+  categories: string[],
+  fallback: WorkerNewsRelevance
+): WorkerNewsRelevance {
+  const text = `${title} ${summary} ${categories.join(' ')}`.toLowerCase();
+  if (/\b(dns|dnssec|doh|dot|nameserver|resolver|tld|icann|registrar|cname|mx|dmarc|spf|dkim)\b/.test(text)) {
+    return 'dns';
+  }
+  if (/\b(bgp|routing|rpki|ipv6|ipv4|anycast|asn|peering|traceroute|latency|cdn)\b/.test(text)) {
+    return 'routing';
+  }
+  if (/\b(tls|ssl|certificate|ddos|ransomware|vulnerability|cve|exploit|phishing|malware|zero-day|security)\b/.test(text)) {
+    return 'security';
+  }
+  return fallback;
+}
+
+async function sha256ShortId(seed: string): Promise<string> {
+  const bytes = new TextEncoder().encode(seed);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const arr = Array.from(new Uint8Array(digest)).slice(0, 15);
+  return btoa(String.fromCharCode(...arr))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function fetchWorkerSingleFeed(src: {
+  feedUrl: string;
+  defaultRelevance: WorkerNewsRelevance;
+}): Promise<WorkerNewsArticle[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4500);
+  try {
+    const res = await fetch(src.feedUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'DNSLocatorNewsroom/1.0 (+https://dnslocator.online)',
+        Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9',
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const xml = await res.text();
+    const blocks = xml.match(/<(?:item|entry)(?:\s[^>]*)?>[\s\S]*?<\/(?:item|entry)>/gi) ?? [];
+    const items: WorkerNewsArticle[] = [];
+    for (const block of blocks.slice(0, 8)) {
+      const title = stripWorkerHtml(extractWorkerTag(block, ['title']), 150);
+      if (!title) continue;
+      const rawDesc =
+        extractWorkerTag(block, ['description', 'summary', 'content:encoded', 'content']) || title;
+      const summary = stripWorkerHtml(rawDesc, 200) || title;
+      const details = stripWorkerHtml(rawDesc, 520) || summary;
+      const rawDate = extractWorkerTag(block, ['pubDate', 'published', 'updated', 'dc:date']);
+      const parsedTime = rawDate ? Date.parse(decodeWorkerHtml(rawDate)) : Number.NaN;
+      const publishedAt = Number.isFinite(parsedTime)
+        ? new Date(parsedTime).toISOString()
+        : new Date().toISOString();
+      const categories = extractWorkerCategories(block);
+      const relevance = classifyWorkerRelevance(title, summary, categories, src.defaultRelevance);
+      const id = await sha256ShortId(`${src.defaultRelevance}:${publishedAt}:${title}`.toLowerCase());
+      items.push({
+        id,
+        title,
+        publisher: 'DNS Locator',
+        publishedAt,
+        summary,
+        details,
+        categories: categories.length > 0 ? categories : [relevance.toUpperCase()],
+        relevance,
+        suggestedDomain: 'www.dnslocator.online',
+      });
+    }
+    return items;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getWorkerLiveNews(forceRefresh = false): Promise<{
+  articles: WorkerNewsArticle[];
+  fetchedAt: string;
+  cached: boolean;
+}> {
+  const cacheKey = 'news:feed:v1';
+  if (!forceRefresh) {
+    const hit = memoryCache.get(cacheKey);
+    if (hit && Date.now() <= hit.expiresAt) {
+      return {
+        ...(hit.value as { articles: WorkerNewsArticle[]; fetchedAt: string }),
+        cached: true,
+      };
+    }
+  }
+
+  const settled = await Promise.allSettled(
+    WORKER_PRIVATE_FEEDS.map((src) => fetchWorkerSingleFeed(src))
+  );
+  const collected: WorkerNewsArticle[] = [];
+  for (const r of settled) {
+    if (r.status === 'fulfilled' && r.value.length > 0) {
+      collected.push(...r.value);
+    }
+  }
+
+  if (collected.length === 0) {
+    const stale = memoryCache.get(cacheKey);
+    if (stale) {
+      return {
+        ...(stale.value as { articles: WorkerNewsArticle[]; fetchedAt: string }),
+        cached: true,
+      };
+    }
+    throw new Error('Unable to load DNS Locator news updates right now. Please retry shortly.');
+  }
+
+  const seen = new Set<string>();
+  const deduped: WorkerNewsArticle[] = [];
+  for (const item of collected) {
+    const key = item.title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  const weights: Record<WorkerNewsRelevance, number> = {
+    dns: 36 * 60 * 60 * 1000,
+    routing: 18 * 60 * 60 * 1000,
+    infrastructure: 6 * 60 * 60 * 1000,
+    security: 0,
+  };
+  deduped.sort(
+    (a, b) =>
+      Date.parse(b.publishedAt) + weights[b.relevance] -
+      (Date.parse(a.publishedAt) + weights[a.relevance])
+  );
+
+  const payload = {
+    articles: deduped.slice(0, 14),
+    fetchedAt: new Date().toISOString(),
+    cached: false,
+  };
+  memoryCache.set(cacheKey, { value: payload, expiresAt: Date.now() + 25 * 60 * 1000 });
+  return payload;
+}
+
+function buildWorkerDailyBlogPost(
+  article: WorkerNewsArticle,
+  dateKey: string
+): WorkerDailyBlogPost {
+  const cleanTitle = cleanWorkerText(article.title);
+  const slugBase =
+    cleanTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 56) || 'dns-locator-daily-brief';
+
+  const categoryMap: Record<WorkerNewsRelevance, string> = {
+    dns: 'DNS Propagation',
+    routing: 'Routing & IPv6',
+    security: 'DNS Security',
+    infrastructure: 'Network Diagnostics',
+  };
+  const recordTypeMap: Record<WorkerNewsRelevance, WorkerDailyBlogPost['suggestedRecordType']> = {
+    dns: 'NS',
+    routing: 'AAAA',
+    security: 'TXT',
+    infrastructure: 'A',
+  };
+  const keywordPool: Record<WorkerNewsRelevance, string[]> = {
+    dns: ['dns check', 'dns propagation', 'ttl caching', 'nameserver audit', 'dnssec', 'anycast routing'],
+    routing: ['dns check', 'ip address lookup', 'anycast routing', 'ipv6 adoption', 'bgp stability', 'latency audit'],
+    security: ['dns security', 'dnssec', 'dmarc verification', 'spf records', 'dns check', 'zone integrity'],
+    infrastructure: ['dns propagation', 'edge latency', 'resolver health', 'dns check', 'ttl strategy', 'network diagnostics'],
+  };
+
+  return {
+    slug: `daily-${dateKey}-${slugBase}`,
+    title: cleanTitle.length >= 24 ? cleanTitle : `DNS Locator Daily Brief: ${cleanTitle}`,
+    metaDescription: article.summary.slice(0, 158),
+    excerpt: article.summary.slice(0, 210),
+    category: categoryMap[article.relevance],
+    publishedAt: dateKey,
+    readTimeMinutes: 5,
+    keywords: keywordPool[article.relevance],
+    suggestedDomain: article.suggestedDomain || 'www.dnslocator.online',
+    suggestedRecordType: recordTypeMap[article.relevance],
+    isDailyBrief: true,
+    sections: [
+      {
+        heading: 'What Changed Across Global DNS & Network Paths',
+        paragraphs: [article.summary, article.details || article.summary],
+        bullets: [
+          'Compare authoritative DNS answers across North America, Europe, Asia-Pacific, and Oceania checkpoints.',
+          'Monitor resolver latency variance and Time to Live (TTL) expiration curves during active network changes.',
+          'Validate IPv4 (A) and IPv6 (AAAA) dual-stack consistency before routing production traffic.',
+        ],
+        tip: 'Run a fresh multi-region lookup on DNS Locator immediately after updating DNS zone records to confirm consensus across all 18 checkpoints.',
+      },
+      {
+        heading: 'Operational Checklist for Domain & Infrastructure Teams',
+        paragraphs: [
+          'Consistent zone configuration reduces resolution delays and prevents partial regional outages when recursive resolvers refresh cached answers.',
+          'Teams managing multi-region deployments should audit both primary authoritative records and supporting security policies such as DNSSEC, SPF, and DMARC.',
+        ],
+        bullets: [
+          'Lower record TTL values to 300 seconds ahead of scheduled migrations or failover tests.',
+          'Inspect SOA serial alignment and NS delegation consistency across secondary nameservers.',
+          'Use domain comparison audits to catch stale CNAME or TXT entries across staging and production zones.',
+        ],
+      },
+      {
+        heading: 'Verifying Propagation & Latency in Real Time',
+        paragraphs: [
+          'Continuous checkpoint visibility helps engineers distinguish between localized ISP caching delays and upstream authoritative misconfigurations.',
+          'By pairing propagation checks with latency distribution reviews, operators can verify fast, uniform DNS resolution for global visitors.',
+        ],
+      },
+    ],
+  };
+}
+
+async function getWorkerDailyBlogs(forceRegenerate = false): Promise<{
+  posts: WorkerDailyBlogPost[];
+  todayDate: string;
+  todayAvailable: boolean;
+  generating: boolean;
+  error?: string;
+}> {
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const cacheKey = `daily-blog:${todayDate}`;
+  if (!forceRegenerate) {
+    const hit = memoryCache.get(cacheKey);
+    if (hit) {
+      return {
+        posts: [hit.value as unknown as WorkerDailyBlogPost],
+        todayDate,
+        todayAvailable: true,
+        generating: false,
+      };
+    }
+  }
+
+  const news = await getWorkerLiveNews(forceRegenerate);
+  const preferred =
+    news.articles.find((a) => a.relevance === 'dns') ??
+    news.articles.find((a) => a.relevance === 'routing') ??
+    news.articles[0];
+
+  if (!preferred) {
+    return {
+      posts: [],
+      todayDate,
+      todayAvailable: false,
+      generating: false,
+      error: 'No current DNS updates available for today’s daily briefing.',
+    };
+  }
+
+  const post = buildWorkerDailyBlogPost(preferred, todayDate);
+  memoryCache.set(cacheKey, {
+    value: post as unknown as Record<string, unknown>,
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+  });
+  return {
+    posts: [post],
+    todayDate,
+    todayAvailable: true,
+    generating: false,
+  };
+}
+
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
     const origin = (env.APP_URL || url.origin).replace(/\/$/, '');
+    const reqOrigin = request.headers.get('Origin') || '*';
+    const corsHeaders: Record<string, string> = {
+      'Access-Control-Allow-Origin': reqOrigin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      ...(reqOrigin !== '*' ? { Vary: 'Origin' } : {}),
+    };
+
+    if (url.pathname.startsWith('/api/') && request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
     const clientIp =
       request.headers.get('CF-Connecting-IP') ||
       request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
@@ -1173,6 +1597,41 @@ export default {
       } catch {
         return jsonResponse({ error: 'Invalid JSON request body.' }, 400);
       }
+    }
+
+    if (url.pathname === '/api/news' && request.method === 'GET') {
+      const forceRefresh = url.searchParams.get('refresh') === '1';
+      try {
+        const feed = await getWorkerLiveNews(forceRefresh);
+        return jsonResponse(feed, 200, { ...corsHeaders, 'Cache-Control': 'no-store' });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to load live DNS and network news.';
+        return jsonResponse({ error: msg }, 502, { ...corsHeaders, 'Cache-Control': 'no-store' });
+      }
+    }
+
+    if (url.pathname === '/api/daily-blogs' && request.method === 'GET') {
+      try {
+        const result = await getWorkerDailyBlogs(false);
+        return jsonResponse(result, 200, { ...corsHeaders, 'Cache-Control': 'no-store' });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to load daily blog posts.';
+        return jsonResponse({ error: msg, posts: [] }, 500, { ...corsHeaders, 'Cache-Control': 'no-store' });
+      }
+    }
+
+    if (url.pathname === '/api/daily-blogs/generate' && request.method === 'POST') {
+      try {
+        const result = await getWorkerDailyBlogs(true);
+        return jsonResponse(result, 200, { ...corsHeaders, 'Cache-Control': 'no-store' });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to generate daily blog post.';
+        return jsonResponse({ error: msg, posts: [] }, 502, { ...corsHeaders, 'Cache-Control': 'no-store' });
+      }
+    }
+
+    if (url.pathname.startsWith('/api/')) {
+      return jsonResponse({ error: 'API endpoint not found.' }, 404, corsHeaders);
     }
 
     return env.ASSETS.fetch(request);

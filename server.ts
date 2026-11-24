@@ -5,8 +5,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
-import { generateAiGameDebrief, generateAiGameMission } from './server/gemini';
-import { fetchLiveDnsNews, getAndEnsureDailyBlogs } from './server/newsAndDailyBlog';
+import { generateAiGameDebrief, generateAiGameMission } from './server/gemini.ts';
+import { fetchLiveDnsNews, getAndEnsureDailyBlogs } from './server/newsAndDailyBlog.ts';
 
 dotenv.config();
 

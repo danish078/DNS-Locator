@@ -569,6 +569,7 @@ export default function App() {
       newsAbortRef.current = null;
     }
 
+    const endpoint = `/api/news${forceRefresh ? '?refresh=1' : ''}`;
     const controller = new AbortController();
     newsAbortRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), 12000);
@@ -578,45 +579,110 @@ export default function App() {
     setNewsError(null);
     let keepLoadingForRetry = false;
 
+    let responseStatus: number | null = null;
+    let responseContentType = '';
+    let responseUrl = '';
+    let responseType: ResponseType | '' = '';
+    let failureCategory: 'cors' | 'network' | 'server-parse' = 'network';
+
     try {
-      const res = await fetch(`/api/news${forceRefresh ? '?refresh=1' : ''}`, {
+      const res = await fetch(endpoint, {
         cache: 'no-store',
+        credentials: 'same-origin',
         headers: { Accept: 'application/json' },
         signal: controller.signal,
       });
 
-      const contentType = res.headers.get('content-type') || '';
+      responseStatus = res.status;
+      responseContentType = res.headers.get('content-type') || '';
+      responseUrl = res.url || '';
+      responseType = res.type;
+
+      if (res.type === 'opaque') {
+        failureCategory = 'cors';
+        throw new Error('Cross-origin (CORS) blocked reading the news response.');
+      }
+
       const text = await res.text();
 
       let json: unknown = {};
       if (text) {
-        if (contentType.includes('text/html') && !text.trim().startsWith('{')) {
-          throw new Error('News endpoint returned HTML instead of JSON.');
+        if (
+          res.url.includes('__cookie_check') ||
+          (responseContentType.includes('text/html') && !text.trim().startsWith('{'))
+        ) {
+          failureCategory = res.url.includes('__cookie_check') ? 'cors' : 'server-parse';
+          throw new Error(
+            res.url.includes('__cookie_check')
+              ? 'Preview session verification redirected the request. Please click Retry.'
+              : 'News endpoint returned HTML instead of JSON.'
+          );
         }
         try {
           json = JSON.parse(text);
         } catch {
+          failureCategory = 'server-parse';
           throw new Error('Unable to parse DNS Locator news JSON response.');
         }
       }
 
       if (!res.ok) {
+        failureCategory = 'server-parse';
         const errMsg =
-          json && typeof json === 'object' && 'error' in json && typeof (json as { error?: unknown }).error === 'string'
+          json &&
+          typeof json === 'object' &&
+          'error' in json &&
+          typeof (json as { error?: unknown }).error === 'string'
             ? (json as { error: string }).error
             : `Unable to load news updates (HTTP ${res.status}).`;
         throw new Error(errMsg);
       }
 
-      const normalized = normalizeNewsFeedResponse(json);
-      setNewsFeed(normalized);
-      setNewsRetryAttempt(0);
+      try {
+        const normalized = normalizeNewsFeedResponse(json);
+        setNewsFeed(normalized);
+        setNewsRetryAttempt(0);
+      } catch (schemaErr) {
+        failureCategory = 'server-parse';
+        throw schemaErr;
+      }
     } catch (err) {
       if (controller.signal.aborted && newsAbortRef.current !== controller) {
         // Superseded by a newer user-triggered fetch
         return;
       }
+
+      const errMessage = err instanceof Error ? err.message : String(err ?? '');
+      const errName = err instanceof Error ? err.name : typeof err;
+
+      // Classify root cause: CORS vs Network/Timeout vs Server/Parsing
+      let resolvedCategory: 'cors' | 'network' | 'server-parse' = failureCategory;
+      if (responseStatus === null) {
+        if (/cors|cross-origin|origin/i.test(errMessage)) {
+          resolvedCategory = 'cors';
+        } else {
+          resolvedCategory = 'network';
+        }
+      } else if (err instanceof SyntaxError) {
+        resolvedCategory = 'server-parse';
+      }
+
+      const diagnosticDetails = {
+        category: resolvedCategory,
+        endpoint,
+        retryAttempt,
+        willRetry: retryAttempt < 2,
+        online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        status: responseStatus,
+        responseType: responseType || null,
+        contentType: responseContentType || null,
+        responseUrl: responseUrl || null,
+        errorName: errName,
+        errorMessage: errMessage,
+      };
+
       if (retryAttempt < 2) {
+        console.warn('[DNS Locator][fetchNews] Transient error, scheduling retry:', diagnosticDetails, err);
         keepLoadingForRetry = true;
         const nextAttempt = retryAttempt + 1;
         setNewsRetryAttempt(nextAttempt);
@@ -625,13 +691,14 @@ export default function App() {
         }, 1200 * nextAttempt);
         return;
       }
-      const message =
+
+      console.error('[DNS Locator][fetchNews] Failed after retries:', diagnosticDetails, err);
+
+      const userMessage =
         err instanceof Error && err.name === 'AbortError'
           ? 'DNS Locator news request timed out. Please click Retry.'
-          : err instanceof Error && err.message
-            ? err.message
-            : 'Unable to load DNS Locator news right now. Please click Retry.';
-      setNewsError(message);
+          : errMessage || 'Unable to load DNS Locator news right now. Please click Retry.';
+      setNewsError(userMessage);
     } finally {
       window.clearTimeout(timeoutId);
       if (newsAbortRef.current === controller) {
@@ -654,9 +721,27 @@ export default function App() {
     try {
       const res = await fetch(
         forceRegenerate ? '/api/daily-blogs/generate' : '/api/daily-blogs',
-        forceRegenerate ? { method: 'POST', cache: 'no-store' } : { cache: 'no-store' }
+        forceRegenerate
+          ? {
+              method: 'POST',
+              cache: 'no-store',
+              credentials: 'same-origin',
+              headers: { Accept: 'application/json' },
+            }
+          : {
+              cache: 'no-store',
+              credentials: 'same-origin',
+              headers: { Accept: 'application/json' },
+            }
       );
+      const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
+      if (
+        res.url.includes('__cookie_check') ||
+        (contentType.includes('text/html') && !text.trim().startsWith('{'))
+      ) {
+        throw new Error('Daily blog endpoint returned HTML instead of JSON.');
+      }
       let json: {
         posts?: BlogPost[];
         generating?: boolean;
