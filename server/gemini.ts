@@ -313,26 +313,29 @@ const VALID_SUGGESTED_RECORD_TYPES = new Set([
   'CAA',
 ]);
 
-const THIRD_PARTY_PATTERNS = [
-  /\bcloudflare(?:\s+blog)?\b/gi,
-  /\bapnic(?:\s+blog)?\b/gi,
-  /\bripe(?:\s+labs|\s+ncc)?\b/gi,
-  /\bsans(?:\s+internet\s+storm\s+center|\s+isc)?\b/gi,
-  /\bbleeping\s*computer\b/gi,
-  /\btechcrunch\b/gi,
-  /\barstechnica\b/gi,
-  /\bzdnet\b/gi,
-  /\bai[- ]generated\b/gi,
-  /\bgenerated\s+(?:by|with|via|from)\s+(?:ai|gemini|llm)\b/gi,
+const THIRD_PARTY_PATTERNS: Array<[RegExp, string]> = [
+  [/\bat\s+cloudflare\b/gi, 'at global edge networks'],
+  [/\bfrom\s+cloudflare(?:\s+blog)?\b/gi, 'across global edge infrastructure'],
+  [/\bcloudflare(?:'s)?(?:\s+blog)?\b/gi, 'edge network'],
+  [/\bapnic(?:'s)?(?:\s+blog)?\b/gi, 'regional internet registry'],
+  [/\bripe(?:'s)?(?:\s+labs|\s+ncc)?\b/gi, 'internet measurement'],
+  [/\bsans(?:\s+internet\s+storm\s+center|\s+isc)?\b/gi, 'threat intelligence'],
+  [/\bbleeping\s*computer\b/gi, 'security advisory'],
+  [/\btechcrunch\b/gi, 'industry reports'],
+  [/\barstechnica\b/gi, 'industry reports'],
+  [/\bzdnet\b/gi, 'industry reports'],
+  [/\bai[- ]generated\b/gi, 'editorial'],
+  [/\bgenerated\s+(?:by|with|via|from)\s+(?:ai|gemini|llm)\b/gi, 'compiled by DNS Locator'],
 ];
 
 export function stripThirdPartyAndAiMentions(text: string): string {
   let cleaned = text;
-  for (const pattern of THIRD_PARTY_PATTERNS) {
-    cleaned = cleaned.replace(pattern, 'network infrastructure');
+  for (const [pattern, replacement] of THIRD_PARTY_PATTERNS) {
+    cleaned = cleaned.replace(pattern, replacement);
   }
   return cleaned
     .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\bThe post\b[\s\S]*?\bappeared first on\b[\s\S]*/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }

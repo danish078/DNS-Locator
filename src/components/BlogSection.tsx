@@ -19,6 +19,7 @@ interface BlogSectionProps {
   dailyPosts: BlogPost[];
   isDailyLoading?: boolean;
   dailyError?: string | null;
+  onRetryDaily?: () => void;
   onNavigateHome: () => void;
   onNavigateBlogIndex: () => void;
   onSelectPost: (slug: string) => void;
@@ -30,6 +31,7 @@ export default function BlogSection({
   dailyPosts,
   isDailyLoading = false,
   dailyError = null,
+  onRetryDaily,
   onNavigateHome,
   onNavigateBlogIndex,
   onSelectPost,
@@ -191,10 +193,21 @@ export default function BlogSection({
         {dailyError && (
           <div
             role="status"
-            className="rounded-xl border border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 p-4 flex items-start gap-3 text-xs sm:text-sm text-amber-900 dark:text-amber-200"
+            className="rounded-xl border border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 p-4 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm text-amber-900 dark:text-amber-200"
           >
-            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
-            <span>{dailyError}</span>
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>{dailyError}</span>
+            </div>
+            {onRetryDaily && (
+              <button
+                type="button"
+                onClick={onRetryDaily}
+                className="h-8 px-3 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold cursor-pointer shrink-0"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 

@@ -52,6 +52,8 @@ const PRIVATE_NEWS_FEEDS: FeedSourceDef[] = [
 ];
 
 const NEWS_CACHE_TTL_MS = 25 * 60 * 1000;
+const NEWS_STORE_VERSION = 2;
+const NEWS_STORE_PATH = path.resolve(process.cwd(), '.cache', 'news-feed.json');
 const DAILY_BLOG_STORE_VERSION = 2;
 const DAILY_BLOG_STORE_PATH = path.resolve(process.cwd(), '.cache', 'daily-blogs.json');
 const MAX_STORED_DAILY_POSTS = 14;
@@ -61,6 +63,8 @@ let cachedNewsState: {
   expiresAt: number;
 } | null = null;
 
+let pendingNewsFetch: Promise<ServerNewsFeedResponse> | null = null;
+let pendingNewsPolish: Promise<void> | null = null;
 let memoryDailyPosts: GeneratedDailyBlogPayload[] | null = null;
 let pendingDailyGeneration: Promise<void> | null = null;
 
@@ -224,7 +228,7 @@ function parseFeedXml(xml: string, source: FeedSourceDef): RawParsedFeedItem[] {
 
 async function fetchSingleFeed(source: FeedSourceDef): Promise<RawParsedFeedItem[]> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5500);
+  const timeout = setTimeout(() => controller.abort(), 2500);
   try {
     const response = await fetch(source.feedUrl, {
       signal: controller.signal,
@@ -243,118 +247,210 @@ async function fetchSingleFeed(source: FeedSourceDef): Promise<RawParsedFeedItem
   }
 }
 
+interface StoredNewsEnvelope {
+  version: number;
+  expiresAt: number;
+  data: ServerNewsFeedResponse;
+}
+
+function readStoredNewsFeed(): { data: ServerNewsFeedResponse; expiresAt: number } | null {
+  if (cachedNewsState) {
+    return cachedNewsState;
+  }
+  try {
+    if (fs.existsSync(NEWS_STORE_PATH)) {
+      const raw = fs.readFileSync(NEWS_STORE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw) as StoredNewsEnvelope;
+      if (
+        parsed &&
+        parsed.version === NEWS_STORE_VERSION &&
+        parsed.data &&
+        Array.isArray(parsed.data.articles) &&
+        parsed.data.articles.length > 0
+      ) {
+        cachedNewsState = { data: parsed.data, expiresAt: parsed.expiresAt || 0 };
+        return cachedNewsState;
+      }
+    }
+  } catch {
+    // Ignore corrupt disk cache
+  }
+  return null;
+}
+
+function writeStoredNewsFeed(data: ServerNewsFeedResponse, expiresAt: number): void {
+  cachedNewsState = { data, expiresAt };
+  try {
+    fs.mkdirSync(path.dirname(NEWS_STORE_PATH), { recursive: true });
+    const envelope: StoredNewsEnvelope = {
+      version: NEWS_STORE_VERSION,
+      expiresAt,
+      data,
+    };
+    fs.writeFileSync(NEWS_STORE_PATH, JSON.stringify(envelope, null, 2), 'utf-8');
+  } catch {
+    // Continue with memory cache if filesystem is read-only
+  }
+}
+
+function scheduleBackgroundNewsPolish(
+  rawItems: RawParsedFeedItem[],
+  basePayload: ServerNewsFeedResponse,
+  expiresAt: number
+): void {
+  if (pendingNewsPolish) return;
+  pendingNewsPolish = (async () => {
+    try {
+      const synthesized = await synthesizeDnsLocatorNewsDispatches(rawItems);
+      if (synthesized.length === 0) return;
+      const rewrittenMap = new Map(
+        synthesized
+          .filter((item) => item && typeof item.id === 'string')
+          .map((item) => [
+            item.id,
+            {
+              title: stripThirdPartyAndAiMentions(item.title || ''),
+              summary: stripThirdPartyAndAiMentions(item.summary || ''),
+              details: stripThirdPartyAndAiMentions(item.details || ''),
+              categories: Array.isArray(item.categories)
+                ? item.categories.map((c) => stripThirdPartyAndAiMentions(String(c))).slice(0, 3)
+                : [],
+              suggestedDomain:
+                typeof item.suggestedDomain === 'string' &&
+                /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(item.suggestedDomain.trim()) &&
+                !/cloudflare|apnic|ripe|bleepingcomputer|sans\.edu/i.test(item.suggestedDomain)
+                  ? item.suggestedDomain.trim().toLowerCase()
+                  : 'www.dnslocator.online',
+            },
+          ])
+      );
+
+      const seenTitles = new Set<string>();
+      const polishedArticles: ServerNewsArticle[] = [];
+      for (const art of basePayload.articles) {
+        const rw = rewrittenMap.get(art.id);
+        const candidate: ServerNewsArticle = rw
+          ? {
+              ...art,
+              title: rw.title || art.title,
+              summary: rw.summary || art.summary,
+              details: rw.details || art.details,
+              categories: rw.categories.length > 0 ? rw.categories : art.categories,
+              suggestedDomain: rw.suggestedDomain || art.suggestedDomain,
+            }
+          : art;
+        const normTitle = candidate.title.toLowerCase();
+        if (seenTitles.has(normTitle)) continue;
+        seenTitles.add(normTitle);
+        polishedArticles.push(candidate);
+      }
+
+      writeStoredNewsFeed(
+        {
+          ...basePayload,
+          articles: polishedArticles,
+        },
+        expiresAt
+      );
+    } catch {
+      // Non-fatal: already serving sanitized articles
+    } finally {
+      pendingNewsPolish = null;
+    }
+  })();
+}
+
 export async function fetchLiveDnsNews(
   forceRefresh = false
 ): Promise<ServerNewsFeedResponse> {
   const now = Date.now();
-  if (!forceRefresh && cachedNewsState && cachedNewsState.expiresAt > now) {
+  const stored = readStoredNewsFeed();
+  if (!forceRefresh && stored && stored.expiresAt > now) {
     return {
-      ...cachedNewsState.data,
+      ...stored.data,
       cached: true,
     };
   }
 
-  const settled = await Promise.allSettled(
-    PRIVATE_NEWS_FEEDS.map((src) => fetchSingleFeed(src))
-  );
-  const collected: RawParsedFeedItem[] = [];
-
-  for (const res of settled) {
-    if (res.status === 'fulfilled' && res.value.length > 0) {
-      collected.push(...res.value);
-    }
+  if (pendingNewsFetch) {
+    return pendingNewsFetch;
   }
 
-  if (collected.length === 0) {
-    if (cachedNewsState) {
-      return {
-        ...cachedNewsState.data,
-        cached: true,
-      };
-    }
-    throw new Error('Unable to load DNS Locator news updates right now. Please retry shortly.');
-  }
+  pendingNewsFetch = (async () => {
+    const settled = await Promise.allSettled(
+      PRIVATE_NEWS_FEEDS.map((src) => fetchSingleFeed(src))
+    );
+    const collected: RawParsedFeedItem[] = [];
 
-  const seen = new Set<string>();
-  const deduped: RawParsedFeedItem[] = [];
-  for (const article of collected) {
-    const key = article.title.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(article);
-  }
-
-  const relevanceWeight: Record<NewsRelevance, number> = {
-    dns: 36 * 60 * 60 * 1000,
-    routing: 18 * 60 * 60 * 1000,
-    infrastructure: 6 * 60 * 60 * 1000,
-    security: 0,
-  };
-
-  deduped.sort((a, b) => {
-    const scoreA = Date.parse(a.publishedAt) + relevanceWeight[a.relevance];
-    const scoreB = Date.parse(b.publishedAt) + relevanceWeight[b.relevance];
-    return scoreB - scoreA;
-  });
-
-  const topRaw = deduped.slice(0, 14);
-  const rewrittenMap = new Map<
-    string,
-    { title: string; summary: string; details: string; categories: string[]; suggestedDomain?: string }
-  >();
-
-  try {
-    const synthesized = await synthesizeDnsLocatorNewsDispatches(topRaw);
-    for (const item of synthesized) {
-      if (item && typeof item.id === 'string') {
-        rewrittenMap.set(item.id, {
-          title: stripThirdPartyAndAiMentions(item.title || ''),
-          summary: stripThirdPartyAndAiMentions(item.summary || ''),
-          details: stripThirdPartyAndAiMentions(item.details || ''),
-          categories: Array.isArray(item.categories)
-            ? item.categories.map((c) => stripThirdPartyAndAiMentions(String(c))).slice(0, 3)
-            : [],
-          suggestedDomain:
-            typeof item.suggestedDomain === 'string' &&
-            /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(item.suggestedDomain.trim()) &&
-            !/cloudflare|apnic|ripe|bleepingcomputer|sans\.edu/i.test(item.suggestedDomain)
-              ? item.suggestedDomain.trim().toLowerCase()
-              : 'www.dnslocator.online',
-        });
+    for (const res of settled) {
+      if (res.status === 'fulfilled' && res.value.length > 0) {
+        collected.push(...res.value);
       }
     }
-  } catch {
-    // Fallback cleanly to sanitized headlines/summaries if Gemini synthesis is unavailable
-  }
 
-  const articles: ServerNewsArticle[] = topRaw.map((raw) => {
-    const rewritten = rewrittenMap.get(raw.id);
-    return {
+    if (collected.length === 0) {
+      if (stored) {
+        return {
+          ...stored.data,
+          cached: true,
+        };
+      }
+      throw new Error('Unable to load DNS Locator news updates right now. Please retry shortly.');
+    }
+
+    const seen = new Set<string>();
+    const deduped: RawParsedFeedItem[] = [];
+    for (const article of collected) {
+      const key = article.title.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(article);
+    }
+
+    const relevanceWeight: Record<NewsRelevance, number> = {
+      dns: 36 * 60 * 60 * 1000,
+      routing: 18 * 60 * 60 * 1000,
+      infrastructure: 6 * 60 * 60 * 1000,
+      security: 0,
+    };
+
+    deduped.sort((a, b) => {
+      const scoreA = Date.parse(a.publishedAt) + relevanceWeight[a.relevance];
+      const scoreB = Date.parse(b.publishedAt) + relevanceWeight[b.relevance];
+      return scoreB - scoreA;
+    });
+
+    const topRaw = deduped.slice(0, 14);
+    const articles: ServerNewsArticle[] = topRaw.map((raw) => ({
       id: raw.id,
-      title: rewritten?.title || raw.title,
+      title: raw.title,
       publisher: 'DNS Locator',
       publishedAt: raw.publishedAt,
-      summary: rewritten?.summary || raw.summary,
-      details: rewritten?.details || raw.details,
-      categories:
-        rewritten && rewritten.categories.length > 0 ? rewritten.categories : raw.categories,
+      summary: raw.summary,
+      details: raw.details,
+      categories: raw.categories.length > 0 ? raw.categories : [raw.relevance.toUpperCase()],
       relevance: raw.relevance,
-      suggestedDomain: rewritten?.suggestedDomain ?? 'www.dnslocator.online',
+      suggestedDomain: 'www.dnslocator.online',
+    }));
+
+    const payload: ServerNewsFeedResponse = {
+      articles,
+      fetchedAt: new Date().toISOString(),
+      cached: false,
     };
+
+    const expiresAt = Date.now() + NEWS_CACHE_TTL_MS;
+    writeStoredNewsFeed(payload, expiresAt);
+
+    // Upgrade headlines & details asynchronously in the background so responses stay < 2s
+    scheduleBackgroundNewsPolish(topRaw, payload, expiresAt);
+
+    return payload;
+  })().finally(() => {
+    pendingNewsFetch = null;
   });
 
-  const payload: ServerNewsFeedResponse = {
-    articles,
-    fetchedAt: new Date().toISOString(),
-    cached: false,
-  };
-
-  cachedNewsState = {
-    data: payload,
-    expiresAt: now + NEWS_CACHE_TTL_MS,
-  };
-
-  return payload;
+  return pendingNewsFetch;
 }
 
 function getTodayUtcDateKey(): string {
@@ -409,12 +505,15 @@ function writeStoredDailyBlogs(posts: GeneratedDailyBlogPayload[]): void {
   }
 }
 
+let lastDailyError: string | undefined;
+
 export async function getAndEnsureDailyBlogs(options?: {
   forceRegenerateToday?: boolean;
 }): Promise<{
   posts: GeneratedDailyBlogPayload[];
   todayDate: string;
   todayAvailable: boolean;
+  generating?: boolean;
   error?: string;
 }> {
   const todayDate = getTodayUtcDateKey();
@@ -422,50 +521,70 @@ export async function getAndEnsureDailyBlogs(options?: {
   const hasToday = posts.some((p) => p.publishedAt === todayDate);
 
   if (!hasToday || options?.forceRegenerateToday) {
-    let generationError: string | undefined;
-
+    let generationInFlight = true;
     if (!pendingDailyGeneration) {
+      lastDailyError = undefined;
       pendingDailyGeneration = (async () => {
-        const newsFeed = await fetchLiveDnsNews(Boolean(options?.forceRegenerateToday));
-        const preferredArticle =
-          newsFeed.articles.find((a) => a.relevance === 'dns') ??
-          newsFeed.articles.find((a) => a.relevance === 'routing') ??
-          newsFeed.articles[0];
+        try {
+          const newsFeed = await fetchLiveDnsNews(Boolean(options?.forceRegenerateToday));
+          const preferredArticle =
+            newsFeed.articles.find((a) => a.relevance === 'dns') ??
+            newsFeed.articles.find((a) => a.relevance === 'routing') ??
+            newsFeed.articles[0];
 
-        if (!preferredArticle) {
-          throw new Error('No current DNS updates available for today’s daily briefing.');
+          if (!preferredArticle) {
+            throw new Error('No current DNS updates available for today’s daily briefing.');
+          }
+
+          const generated = await generateDailyBlogPostFromNews(preferredArticle, todayDate);
+          const existingOtherDays = readStoredDailyBlogs().filter(
+            (p) => p.publishedAt !== todayDate && p.slug !== generated.slug
+          );
+          writeStoredDailyBlogs([generated, ...existingOtherDays]);
+        } catch (err) {
+          lastDailyError =
+            err instanceof Error
+              ? err.message
+              : 'Unable to publish today’s daily DNS Locator blog post.';
         }
-
-        const generated = await generateDailyBlogPostFromNews(preferredArticle, todayDate);
-        const existingOtherDays = readStoredDailyBlogs().filter(
-          (p) => p.publishedAt !== todayDate && p.slug !== generated.slug
-        );
-        writeStoredDailyBlogs([generated, ...existingOtherDays]);
       })().finally(() => {
+        generationInFlight = false;
         pendingDailyGeneration = null;
       });
     }
 
-    try {
-      await pendingDailyGeneration;
-      posts = readStoredDailyBlogs();
-    } catch (err) {
-      generationError =
-        err instanceof Error
-          ? err.message
-          : 'Unable to publish today’s daily DNS Locator blog post.';
+    // Bound HTTP wait to 3.5s so proxy/browser requests never time out on cold Gemini generation
+    await Promise.race([
+      pendingDailyGeneration.then(() => {
+        generationInFlight = false;
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 3500)),
+    ]);
+
+    posts = readStoredDailyBlogs();
+    const availableNow = posts.some((p) => p.publishedAt === todayDate);
+    if (!availableNow && generationInFlight) {
       return {
         posts,
         todayDate,
-        todayAvailable: posts.some((p) => p.publishedAt === todayDate),
-        error: generationError,
+        todayAvailable: false,
+        generating: true,
       };
     }
+
+    return {
+      posts,
+      todayDate,
+      todayAvailable: availableNow,
+      generating: false,
+      error: availableNow ? undefined : lastDailyError,
+    };
   }
 
   return {
     posts,
     todayDate,
-    todayAvailable: posts.some((p) => p.publishedAt === todayDate),
+    todayAvailable: true,
+    generating: false,
   };
 }

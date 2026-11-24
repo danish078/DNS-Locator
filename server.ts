@@ -1704,6 +1704,8 @@ self.addEventListener('activate', (event) => {
   const port = Number(process.env.PORT) || 3000;
   httpServer.listen(port, '0.0.0.0', () => {
     console.log(`dnslocator.online server listening on http://0.0.0.0:${port}`);
+    // Pre-warm newsroom & daily blog caches in the background so user requests stay instant
+    void getAndEnsureDailyBlogs().catch(() => {});
   });
 }
 

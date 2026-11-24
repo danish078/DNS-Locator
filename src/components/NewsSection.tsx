@@ -64,6 +64,11 @@ export default function NewsSection({
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const availableTopics = useMemo(() => {
+    const present = new Set((feed?.articles ?? []).map((a) => a.relevance));
+    return TOPIC_FILTERS.filter((t) => t.id === 'all' || present.has(t.id));
+  }, [feed?.articles]);
+
   const filteredArticles = useMemo(() => {
     const list = feed?.articles ?? [];
     const q = query.trim().toLowerCase();
@@ -152,7 +157,7 @@ export default function NewsSection({
             aria-label="Filter news by topic"
             className="flex flex-wrap items-center gap-2"
           >
-            {TOPIC_FILTERS.map((topic) => (
+            {availableTopics.map((topic) => (
               <button
                 key={topic.id}
                 type="button"

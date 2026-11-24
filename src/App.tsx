@@ -474,38 +474,74 @@ export default function App() {
     [recordType, rawInput, allRecordsData?.domain, fetchPropagation, fetchAllRecords]
   );
 
-  const fetchNews = useCallback(async (forceRefresh = false) => {
+  const dailyPollTimerRef = useRef<number | null>(null);
+
+  const fetchNews = useCallback(async (forceRefresh = false, retryAttempt = 0) => {
     setIsNewsLoading(true);
     setNewsError(null);
     try {
-      const res = await fetch(`/api/news${forceRefresh ? '?refresh=1' : ''}`);
-      const json = await res.json();
+      const res = await fetch(`/api/news${forceRefresh ? '?refresh=1' : ''}`, {
+        cache: 'no-store',
+      });
+      const text = await res.text();
+      let json: Partial<NewsFeedResponse> & { error?: string } = {};
+      try {
+        json = text ? (JSON.parse(text) as Partial<NewsFeedResponse> & { error?: string }) : {};
+      } catch {
+        throw new Error('Invalid news response');
+      }
       if (!res.ok) {
-        setNewsError(json.error || `Unable to load live news (HTTP ${res.status}).`);
+        setNewsError(json.error || `Unable to load news updates (HTTP ${res.status}).`);
         return;
       }
       setNewsFeed(json as NewsFeedResponse);
     } catch {
-      setNewsError('Unable to reach the live news service. Please check your connection and retry.');
+      if (retryAttempt < 2) {
+        window.setTimeout(() => {
+          void fetchNews(forceRefresh, retryAttempt + 1);
+        }, 1200);
+        return;
+      }
+      setNewsError('Unable to load DNS Locator news right now. Please click Retry.');
     } finally {
       setIsNewsLoading(false);
     }
   }, []);
 
-  const fetchDailyBlogs = useCallback(async (forceRegenerate = false) => {
+  const fetchDailyBlogs = useCallback(async (forceRegenerate = false, retryAttempt = 0) => {
+    if (dailyPollTimerRef.current) {
+      window.clearTimeout(dailyPollTimerRef.current);
+      dailyPollTimerRef.current = null;
+    }
     setIsDailyLoading(true);
     setDailyError(null);
+    let keepLoadingForPoll = false;
     try {
       const res = await fetch(
         forceRegenerate ? '/api/daily-blogs/generate' : '/api/daily-blogs',
-        forceRegenerate ? { method: 'POST' } : undefined
+        forceRegenerate ? { method: 'POST', cache: 'no-store' } : { cache: 'no-store' }
       );
-      const json = (await res.json()) as {
+      const text = await res.text();
+      let json: {
         posts?: BlogPost[];
+        generating?: boolean;
+        todayAvailable?: boolean;
         error?: string;
-      };
+      } = {};
+      try {
+        json = text ? (JSON.parse(text) as typeof json) : {};
+      } catch {
+        throw new Error('Invalid blog response');
+      }
       if (Array.isArray(json.posts)) {
         setDailyPosts(json.posts);
+      }
+      if (json.generating && retryAttempt < 8) {
+        keepLoadingForPoll = true;
+        dailyPollTimerRef.current = window.setTimeout(() => {
+          void fetchDailyBlogs(false, retryAttempt + 1);
+        }, 3000);
+        return;
       }
       if (!res.ok || json.error) {
         setDailyError(
@@ -513,17 +549,41 @@ export default function App() {
         );
       }
     } catch {
-      setDailyError('Unable to reach DNS Locator blog service.');
+      if (retryAttempt < 2) {
+        keepLoadingForPoll = true;
+        dailyPollTimerRef.current = window.setTimeout(() => {
+          void fetchDailyBlogs(forceRegenerate, retryAttempt + 1);
+        }, 1500);
+        return;
+      }
+      setDailyError('Unable to load today’s DNS Locator briefing right now.');
     } finally {
-      setIsDailyLoading(false);
+      if (!keepLoadingForPoll) {
+        setIsDailyLoading(false);
+      }
     }
   }, []);
 
   // Load DNS Locator news updates & daily briefing on startup
   useEffect(() => {
-    fetchNews();
-    fetchDailyBlogs();
+    void fetchNews();
+    void fetchDailyBlogs();
+    return () => {
+      if (dailyPollTimerRef.current) {
+        window.clearTimeout(dailyPollTimerRef.current);
+      }
+    };
   }, [fetchNews, fetchDailyBlogs]);
+
+  // Ensure data loads cleanly if visitor navigates to News or Blog after a cold start
+  useEffect(() => {
+    if (route === 'news' && !newsFeed && !isNewsLoading) {
+      void fetchNews();
+    }
+    if ((route === 'blog' || route === 'blog-post') && dailyPosts.length === 0 && !isDailyLoading) {
+      void fetchDailyBlogs();
+    }
+  }, [route, newsFeed, isNewsLoading, dailyPosts.length, isDailyLoading, fetchNews, fetchDailyBlogs]);
 
   // Support optional ?domain= deep links on initial mount
   useEffect(() => {
@@ -792,6 +852,9 @@ export default function App() {
                     dailyPosts={dailyPosts}
                     isDailyLoading={isDailyLoading}
                     dailyError={dailyError}
+                    onRetryDaily={() => {
+                      void fetchDailyBlogs();
+                    }}
                     onNavigateHome={() => navigate('home')}
                     onNavigateBlogIndex={() => navigate('blog')}
                     onSelectPost={(slug) => navigate('blog-post', undefined, slug)}
