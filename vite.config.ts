@@ -12,14 +12,26 @@ export default defineConfig(({mode}) => {
     env.GOOGLE_SITE_VERIFICATION ||
     ''
   ).trim();
+  const bingVerificationToken = (
+    env.VITE_BING_SITE_VERIFICATION ||
+    env.BING_SITE_VERIFICATION ||
+    ''
+  ).trim();
 
   return {
     plugins: [
       {
-        name: 'google-site-verification-html',
+        name: 'site-verification-html',
         transformIndexHtml(html) {
-          const escaped = siteVerificationToken.replace(/"/g, '&quot;');
-          return html.replace(/%VITE_GOOGLE_SITE_VERIFICATION%/g, escaped);
+          const escapedGoogle = siteVerificationToken.replace(/"/g, '&quot;');
+          const escapedBing = bingVerificationToken.replace(/"/g, '&quot;');
+          let out = escapedGoogle
+            ? html.replace(/%VITE_GOOGLE_SITE_VERIFICATION%/g, escapedGoogle)
+            : html.replace(/\s*<meta name="google-site-verification" content="%VITE_GOOGLE_SITE_VERIFICATION%" \/>/g, '');
+          out = escapedBing
+            ? out.replace(/%VITE_BING_SITE_VERIFICATION%/g, escapedBing)
+            : out.replace(/\s*<meta name="msvalidate\.01" content="%VITE_BING_SITE_VERIFICATION%" \/>/g, '');
+          return out;
         },
       },
       react(),
@@ -72,9 +84,10 @@ export default defineConfig(({mode}) => {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
+          navigateFallback: null,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff,woff2,webmanifest}'],
-          navigateFallbackDenylist: [/^\/api\//, /^\/robots\.txt$/, /^\/sitemap\.xml$/],
+          globPatterns: ['**/*.{js,css,ico,png,jpg,svg,woff2,webmanifest}'],
+          navigateFallbackDenylist: [/^\/api\//, /^\/robots\.txt$/, /^\/sitemap\.xml$/, /^\/llms\.txt$/],
           runtimeCaching: [
             {
               urlPattern: ({ request, url }) =>
@@ -103,44 +116,17 @@ export default defineConfig(({mode}) => {
                 request.mode === 'navigate' &&
                 !url.pathname.startsWith('/api/') &&
                 url.pathname !== '/robots.txt' &&
-                url.pathname !== '/sitemap.xml',
-              handler: 'StaleWhileRevalidate',
+                url.pathname !== '/sitemap.xml' &&
+                url.pathname !== '/llms.txt',
+              handler: 'NetworkFirst',
               options: {
                 cacheName: 'core-pages-cache',
                 expiration: {
-                  maxEntries: 30,
+                  maxEntries: 40,
                   maxAgeSeconds: 60 * 60 * 24 * 7,
                 },
                 cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'google-fonts-stylesheets',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'gstatic-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
+                  statuses: [200],
                 },
               },
             },
@@ -151,9 +137,6 @@ export default defineConfig(({mode}) => {
           type: 'module',
         },
       }),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
-      // in production builds. Do not remove.
       {
         name: 'copy-unbundled-src-assets',
         apply: 'build',
@@ -168,20 +151,40 @@ export default defineConfig(({mode}) => {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
           }
 
-          // Ensure robots.txt is present in dist/ with optional APP_URL sitemap origin
           const publicRobots = path.resolve(__dirname, 'public/robots.txt');
           const distRobots = path.resolve(distDir, 'robots.txt');
           if (fs.existsSync(distDir) && fs.existsSync(publicRobots)) {
             const rawRobots = fs.readFileSync(publicRobots, 'utf-8');
-            const appOrigin = (env.APP_URL || env.VITE_APP_URL || '').trim().replace(/\/$/, '');
-            const outputRobots = appOrigin
-              ? rawRobots.replace(/https:\/\/dnslocator\.online/g, appOrigin)
+            const canonicalEnv = (env.CANONICAL_ORIGIN || '').trim().replace(/\/$/, '');
+            const outputRobots = canonicalEnv
+              ? rawRobots.replace(/https:\/\/dnslocator\.online/g, canonicalEnv)
               : rawRobots;
             fs.writeFileSync(distRobots, outputRobots, 'utf-8');
           }
         },
       },
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/scheduler/')
+            ) {
+              return 'vendor-react';
+            }
+            if (id.includes('node_modules/three')) return 'vendor-three';
+            if (id.includes('node_modules/d3')) return 'vendor-d3';
+            if (id.includes('node_modules/motion') || id.includes('node_modules/framer-motion')) {
+              return 'vendor-motion';
+            }
+            if (id.includes('node_modules/lucide-react')) return 'vendor-icons';
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

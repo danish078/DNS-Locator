@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  AlertCircle,
   ArrowLeft,
   ArrowRight,
   BookOpen,
@@ -10,61 +9,46 @@ import {
   Lightbulb,
   Search,
   Tag,
+  UserCheck,
 } from 'lucide-react';
+import { getAuthorById } from '../data/authors';
 import { BLOG_POSTS, getBlogPostBySlug, type BlogPost } from '../data/blogs';
+import { getRecordToolBySlug, type RecordToolConfig } from '../data/recordTools';
 import type { DnsRecordType } from '../types/dns';
-import { SkeletonBlock } from './Skeleton';
 
 interface BlogSectionProps {
   activeSlug: string | null;
-  dailyPosts: BlogPost[];
-  isDailyLoading?: boolean;
-  dailyError?: string | null;
-  onRetryDaily?: () => void;
   onNavigateHome: () => void;
   onNavigateBlogIndex: () => void;
   onSelectPost: (slug: string) => void;
+  onNavigatePath?: (path: string) => void;
   onRunDnsCheck: (domain: string, recordType: DnsRecordType) => void;
 }
 
 export default function BlogSection({
   activeSlug,
-  dailyPosts,
-  isDailyLoading = false,
-  dailyError = null,
-  onRetryDaily,
   onNavigateHome,
   onNavigateBlogIndex,
   onSelectPost,
+  onNavigatePath,
   onRunDnsCheck,
 }: BlogSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const allPosts = useMemo(() => {
-    const seen = new Set<string>();
-    const combined: BlogPost[] = [];
-    for (const post of [...dailyPosts, ...BLOG_POSTS]) {
-      if (seen.has(post.slug)) continue;
-      seen.add(post.slug);
-      combined.push(post);
-    }
-    return combined;
-  }, [dailyPosts]);
-
   const categories = useMemo(
-    () => ['All', ...Array.from(new Set(allPosts.map((p) => p.category)))],
-    [allPosts]
+    () => ['All', ...Array.from(new Set(BLOG_POSTS.map((p) => p.category)))],
+    []
   );
 
   const activePost = useMemo(() => {
     if (!activeSlug) return undefined;
-    return allPosts.find((p) => p.slug === activeSlug) ?? getBlogPostBySlug(activeSlug);
-  }, [activeSlug, allPosts]);
+    return getBlogPostBySlug(activeSlug);
+  }, [activeSlug]);
 
   const filteredPosts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return allPosts.filter((post) => {
+    return BLOG_POSTS.filter((post) => {
       const categoryMatch = selectedCategory === 'All' || post.category === selectedCategory;
       if (!categoryMatch) return false;
       if (!q) return true;
@@ -75,36 +59,22 @@ export default function BlogSection({
         post.keywords.some((kw) => kw.toLowerCase().includes(q))
       );
     });
-  }, [allPosts, searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory]);
 
-  const filteredDailyPosts = useMemo(
-    () => filteredPosts.filter((p) => p.isDailyBrief),
-    [filteredPosts]
-  );
-
-  const filteredGuidePosts = useMemo(
-    () => filteredPosts.filter((p) => !p.isDailyBrief),
-    [filteredPosts]
+  const pillarPost = useMemo(
+    () => BLOG_POSTS.find((p) => p.isPillarGuide) ?? BLOG_POSTS[0],
+    []
   );
 
   if (activeSlug && activePost) {
     return (
       <BlogArticleView
         post={activePost}
-        allPosts={allPosts}
         onNavigateHome={onNavigateHome}
         onNavigateBlogIndex={onNavigateBlogIndex}
         onSelectPost={onSelectPost}
+        onNavigatePath={onNavigatePath}
         onRunDnsCheck={onRunDnsCheck}
-      />
-    );
-  }
-
-  if (activeSlug && !activePost && isDailyLoading && activeSlug.startsWith('daily-')) {
-    return (
-      <BlogArticleSkeleton
-        onNavigateHome={onNavigateHome}
-        onNavigateBlogIndex={onNavigateBlogIndex}
       />
     );
   }
@@ -112,17 +82,20 @@ export default function BlogSection({
   return (
     <div className="max-w-5xl mx-auto py-4 sm:py-6 space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <button
-          type="button"
-          onClick={onNavigateHome}
-          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigateHome();
+          }}
+          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300"
         >
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           <span>Back to DNS Lookup</span>
-        </button>
+        </a>
 
         <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
-          {allPosts.length} DNS Locator Articles
+          {BLOG_POSTS.length} Verified Engineering Guides
         </span>
       </div>
 
@@ -134,10 +107,10 @@ export default function BlogSection({
             <span>DNS Locator Engineering Blog</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            Daily DNS Briefings &amp; Network Engineering Guides
+            DNS Propagation &amp; Network Engineering Guides
           </h1>
           <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
-            In-depth field guides and daily engineering briefings from DNS Locator covering global DNS checks, IP address lookup, routing verification, DNSSEC, and domain health monitoring.
+            In-depth field manuals written by the DNS Locator engineering team covering global DNS propagation, TTL strategy, IP/ASN diagnostics, traceroute troubleshooting, and email/TLS security.
           </p>
         </div>
 
@@ -156,7 +129,7 @@ export default function BlogSection({
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search topics (e.g., dns check, tracert, ip lookup, dnssec)..."
+              placeholder="Search topics (e.g., propagation, ttl, spf, dmarc, ipv6)..."
               className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500"
             />
           </div>
@@ -186,69 +159,74 @@ export default function BlogSection({
         </div>
       </section>
 
-      {/* Section 1: Daily Briefings */}
-      <section aria-labelledby="daily-blogs-heading" className="space-y-4">
-        <div className="space-y-0.5">
-          <h2
-            id="daily-blogs-heading"
-            className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100"
-          >
-            Daily DNS Locator Briefings
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Today&apos;s featured DNS and network operations article published by the DNS Locator team.
-          </p>
-        </div>
-
-        {dailyError && (
-          <div
-            role="status"
-            className="rounded-xl border border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 p-4 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm text-amber-900 dark:text-amber-200"
-          >
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
-              <span>{dailyError}</span>
-            </div>
-            {onRetryDaily && (
-              <button
-                type="button"
-                onClick={onRetryDaily}
-                className="h-8 px-3 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold cursor-pointer shrink-0"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-
-        {isDailyLoading && filteredDailyPosts.length === 0 ? (
-          <div role="status" aria-busy="true" aria-live="polite" className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <span className="sr-only">Loading today&apos;s DNS Locator daily briefing</span>
-            <BlogCardSkeleton isDaily />
-          </div>
-        ) : filteredDailyPosts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {filteredDailyPosts.map((post, idx) => (
-              <BlogCard
-                key={post.slug}
-                post={post}
-                index={idx}
-                isDaily
-                onSelectPost={onSelectPost}
-                onRunDnsCheck={onRunDnsCheck}
+      {/* Featured Pillar Guide */}
+      {pillarPost && !searchQuery && selectedCategory === 'All' && (
+        <section
+          aria-labelledby="pillar-guide-heading"
+          className="rounded-2xl border border-emerald-200/90 dark:border-emerald-800/70 bg-gradient-to-br from-white via-emerald-50/25 to-sky-50/35 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/25 p-6 sm:p-7 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center"
+        >
+          <div className="lg:col-span-5">
+            <a
+              href={`/blog/${pillarPost.slug}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onSelectPost(pillarPost.slug);
+              }}
+              className="block overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800"
+            >
+              <img
+                src={pillarPost.shareImage}
+                alt={pillarPost.shareImageAlt}
+                width={800}
+                height={450}
+                className="w-full h-auto object-cover"
               />
-            ))}
+            </a>
           </div>
-        ) : (
-          !dailyError && (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              No daily briefings match the current search filter.
+          <div className="lg:col-span-7 space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              Featured Pillar Guide · {pillarPost.readTimeMinutes} min read
             </div>
-          )
-        )}
-      </section>
+            <h2
+              id="pillar-guide-heading"
+              className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 leading-snug"
+            >
+              <a
+                href={`/blog/${pillarPost.slug}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSelectPost(pillarPost.slug);
+                }}
+                className="hover:text-sky-700 dark:hover:text-sky-400"
+              >
+                {pillarPost.title}
+              </a>
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              {pillarPost.excerpt}
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-slate-500 dark:text-slate-400">
+              <span>
+                By <strong className="text-slate-800 dark:text-slate-200">{getAuthorById(pillarPost.authorId).name}</strong> · Updated{' '}
+                <time dateTime={pillarPost.updatedAt}>{pillarPost.updatedAt}</time>
+              </span>
+              <a
+                href={`/blog/${pillarPost.slug}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSelectPost(pillarPost.slug);
+                }}
+                className="inline-flex items-center gap-1.5 font-semibold text-sky-700 dark:text-sky-400 hover:underline"
+              >
+                <span>Read Complete Guide</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+        </section>
+      )}
 
-      {/* Section 2: Curated Technical Guides */}
+      {/* Technical Guides Grid */}
       <section aria-labelledby="curated-guides-heading" className="space-y-4">
         <div className="space-y-0.5">
           <h2
@@ -258,11 +236,11 @@ export default function BlogSection({
             Technical Engineering Guides
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            In-depth reference manuals for DNS checks, IP/ASN verification, traceroute, and zone audits.
+            Reference manuals for DNS propagation checks, IP/ASN verification, traceroute debugging, and zone security.
           </p>
         </div>
 
-        {filteredGuidePosts.length === 0 && filteredDailyPosts.length === 0 ? (
+        {filteredPosts.length === 0 ? (
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center space-y-2">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
               No blog articles match &ldquo;{searchQuery}&rdquo;
@@ -275,16 +253,12 @@ export default function BlogSection({
               }}
               className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline cursor-pointer"
             >
-              Reset filters and view all {allPosts.length} articles
+              Reset filters and view all {BLOG_POSTS.length} guides
             </button>
-          </div>
-        ) : filteredGuidePosts.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            No technical guides match the current filter.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {filteredGuidePosts.map((post, idx) => (
+            {filteredPosts.map((post, idx) => (
               <BlogCard
                 key={post.slug}
                 post={post}
@@ -300,221 +274,76 @@ export default function BlogSection({
   );
 }
 
-function BlogCardSkeleton({ isDaily = false }: { isDaily?: boolean }) {
-  return (
-    <div
-      className={`rounded-xl border p-6 flex flex-col justify-between gap-4 ${
-        isDaily
-          ? 'border-emerald-200/90 dark:border-emerald-800/70 bg-gradient-to-br from-white via-emerald-50/25 to-teal-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/20'
-          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'
-      }`}
-    >
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <SkeletonBlock
-            tone={isDaily ? 'emerald' : 'sky'}
-            className="h-3.5 w-40 rounded-md"
-          />
-          <div className="flex items-center gap-3">
-            <SkeletonBlock className="h-3.5 w-20 rounded-md" />
-            <SkeletonBlock className="h-3.5 w-16 rounded-md" />
-          </div>
-        </div>
-
-        <div className="space-y-2 pt-0.5">
-          <SkeletonBlock className="h-5 w-11/12 rounded-md" />
-          <SkeletonBlock className="h-5 w-3/4 rounded-md" />
-        </div>
-
-        <div className="space-y-2 pt-1">
-          <SkeletonBlock className="h-3.5 w-full rounded-md" />
-          <SkeletonBlock className="h-3.5 w-5/6 rounded-md" />
-        </div>
-      </div>
-
-      <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <SkeletonBlock className="h-5 w-20 rounded-md" />
-          <SkeletonBlock className="h-5 w-24 rounded-md" />
-          <SkeletonBlock className="h-5 w-16 rounded-md" />
-          <SkeletonBlock className="h-5 w-20 rounded-md" />
-          <SkeletonBlock className="h-5 w-14 rounded-md" />
-        </div>
-
-        <div className="flex items-center justify-between gap-2">
-          <SkeletonBlock tone="sky" className="h-3.5 w-28 rounded-md" />
-          <SkeletonBlock className="h-3.5 w-24 rounded-md" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BlogArticleSkeleton({
-  onNavigateHome,
-  onNavigateBlogIndex,
-}: {
-  onNavigateHome: () => void;
-  onNavigateBlogIndex: () => void;
-}) {
-  return (
-    <div role="status" aria-busy="true" aria-live="polite" className="max-w-4xl mx-auto py-4 sm:py-6 space-y-6">
-      <span className="sr-only">Loading DNS Locator blog article</span>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            onClick={onNavigateBlogIndex}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-            <span>All Blog Articles</span>
-          </button>
-          <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">
-            /
-          </span>
-          <button
-            type="button"
-            onClick={onNavigateHome}
-            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer"
-          >
-            DNS Locator Tool
-          </button>
-        </div>
-
-        <SkeletonBlock tone="emerald" className="h-9 w-36 rounded-lg" />
-      </div>
-
-      <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-10 space-y-7">
-        <header className="space-y-4 border-b border-slate-100 dark:border-slate-800 pb-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <SkeletonBlock tone="sky" className="h-3.5 w-36 rounded-md" />
-            <SkeletonBlock className="h-3.5 w-24 rounded-md" />
-            <SkeletonBlock className="h-3.5 w-20 rounded-md" />
-          </div>
-
-          <div className="space-y-2.5">
-            <SkeletonBlock className="h-8 w-11/12 rounded-lg" />
-            <SkeletonBlock className="h-8 w-2/3 rounded-lg" />
-          </div>
-
-          <div className="space-y-2">
-            <SkeletonBlock className="h-4 w-full rounded-md" />
-            <SkeletonBlock className="h-4 w-5/6 rounded-md" />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <SkeletonBlock className="h-5 w-20 rounded-md" />
-            <SkeletonBlock className="h-5 w-24 rounded-md" />
-            <SkeletonBlock className="h-5 w-20 rounded-md" />
-            <SkeletonBlock className="h-5 w-16 rounded-md" />
-            <SkeletonBlock className="h-5 w-24 rounded-md" />
-          </div>
-        </header>
-
-        <div className="space-y-7">
-          {Array.from({ length: 3 }).map((_, secIdx) => (
-            <div key={secIdx} className="space-y-3">
-              <SkeletonBlock className="h-6 w-64 rounded-md" />
-              <div className="space-y-2">
-                <SkeletonBlock className="h-4 w-full rounded-md" />
-                <SkeletonBlock className="h-4 w-11/12 rounded-md" />
-                <SkeletonBlock className="h-4 w-4/5 rounded-md" />
-              </div>
-              <div className="pl-4 space-y-2 pt-1">
-                <SkeletonBlock className="h-3.5 w-5/6 rounded-md" />
-                <SkeletonBlock className="h-3.5 w-3/4 rounded-md" />
-              </div>
-              {secIdx === 0 && (
-                <SkeletonBlock tone="sky" className="h-12 w-full rounded-lg border border-sky-200/70 dark:border-sky-800/50" />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-2 flex-1">
-            <SkeletonBlock className="h-4 w-52 rounded-md" />
-            <SkeletonBlock className="h-3.5 w-80 max-w-full rounded-md" />
-          </div>
-          <SkeletonBlock tone="emerald" className="h-9 w-36 rounded-lg shrink-0" />
-        </div>
-      </article>
-    </div>
-  );
-}
-
 interface BlogCardProps {
   post: BlogPost;
   index: number;
-  isDaily?: boolean;
   onSelectPost: (slug: string) => void;
   onRunDnsCheck: (domain: string, recordType: DnsRecordType) => void;
 }
 
-function BlogCard({ post, index, isDaily = false, onSelectPost, onRunDnsCheck }: BlogCardProps) {
+function BlogCard({ post, index, onSelectPost, onRunDnsCheck }: BlogCardProps) {
+  const author = getAuthorById(post.authorId);
+
   return (
-    <article
-      className={`rounded-xl border p-6 flex flex-col justify-between gap-4 transition-colors ${
-        isDaily
-          ? 'border-emerald-200/90 dark:border-emerald-800/70 bg-gradient-to-br from-white via-emerald-50/25 to-teal-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/20 hover:border-emerald-400 dark:hover:border-emerald-600'
-          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-sky-300 dark:hover:border-sky-700'
-      }`}
-    >
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-          <span
-            className={`font-semibold ${
-              isDaily ? 'text-emerald-700 dark:text-emerald-400' : 'text-sky-700 dark:text-sky-400'
-            }`}
-          >
-            {isDaily ? 'DNS Locator Daily' : String(index + 1).padStart(2, '0')} · {post.category}
-          </span>
-          <div className="flex items-center gap-3 tabular-nums">
-            <span className="inline-flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
-              <time dateTime={post.publishedAt}>{post.publishedAt}</time>
+    <article className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-sky-300 dark:hover:border-sky-700 overflow-hidden flex flex-col justify-between transition-colors">
+      <div>
+        <a
+          href={`/blog/${post.slug}`}
+          onClick={(e) => {
+            e.preventDefault();
+            onSelectPost(post.slug);
+          }}
+          className="block border-b border-slate-100 dark:border-slate-800"
+        >
+          <img
+            src={post.shareImage}
+            alt={post.shareImageAlt}
+            width={800}
+            height={450}
+            loading="lazy"
+            className="w-full h-44 object-cover"
+          />
+        </a>
+
+        <div className="p-6 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-semibold text-sky-700 dark:text-sky-400">
+              {String(index + 1).padStart(2, '0')} · {post.category}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>{post.readTimeMinutes} min read</span>
-            </span>
+            <div className="flex items-center gap-3 tabular-nums">
+              <span className="inline-flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                <time dateTime={post.updatedAt}>{post.updatedAt}</time>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{post.readTimeMinutes} min read</span>
+              </span>
+            </div>
           </div>
+
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 leading-snug">
+            <a
+              href={`/blog/${post.slug}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onSelectPost(post.slug);
+              }}
+              className="hover:text-sky-700 dark:hover:text-sky-400 transition-colors"
+            >
+              {post.title}
+            </a>
+          </h3>
+
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {post.excerpt}
+          </p>
         </div>
-
-        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 leading-snug">
-          <a
-            href={`/blog/${post.slug}`}
-            onClick={(e) => {
-              e.preventDefault();
-              onSelectPost(post.slug);
-            }}
-            className="hover:text-sky-700 dark:hover:text-sky-400 transition-colors"
-          >
-            {post.title}
-          </a>
-        </h3>
-
-        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-          {post.excerpt}
-        </p>
       </div>
 
-      <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {post.keywords.slice(0, 5).map((kw) => (
-            <span
-              key={kw}
-              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300"
-            >
-              {kw}
-            </span>
-          ))}
-          {post.keywords.length > 5 && (
-            <span className="text-[11px] text-slate-400 dark:text-slate-500">
-              +{post.keywords.length - 5} more
-            </span>
-          )}
+      <div className="px-6 pb-6 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          By <strong className="text-slate-800 dark:text-slate-200">{author.name}</strong>
         </div>
 
         <div className="flex items-center justify-between gap-2">
@@ -545,53 +374,76 @@ function BlogCard({ post, index, isDaily = false, onSelectPost, onRunDnsCheck }:
 
 interface BlogArticleViewProps {
   post: BlogPost;
-  allPosts: BlogPost[];
   onNavigateHome: () => void;
   onNavigateBlogIndex: () => void;
   onSelectPost: (slug: string) => void;
+  onNavigatePath?: (path: string) => void;
   onRunDnsCheck: (domain: string, recordType: DnsRecordType) => void;
 }
 
 function BlogArticleView({
   post,
-  allPosts,
   onNavigateHome,
   onNavigateBlogIndex,
   onSelectPost,
+  onNavigatePath,
   onRunDnsCheck,
 }: BlogArticleViewProps) {
+  const author = getAuthorById(post.authorId);
+
+  const relatedTools = useMemo(
+    () =>
+      post.relatedRecordSlugs
+        .map((slug) => getRecordToolBySlug(slug))
+        .filter((tool): tool is RecordToolConfig => Boolean(tool)),
+    [post.relatedRecordSlugs]
+  );
+
   const relatedPosts = useMemo(() => {
-    const sameCategory = allPosts.filter(
+    const sameCategory = BLOG_POSTS.filter(
       (item) => item.slug !== post.slug && item.category === post.category
     );
-    const others = allPosts.filter(
+    const others = BLOG_POSTS.filter(
       (item) => item.slug !== post.slug && item.category !== post.category
     );
     return [...sameCategory, ...others].slice(0, 3);
-  }, [post, allPosts]);
+  }, [post]);
+
+  const handleLink = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (onNavigatePath && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      onNavigatePath(path);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto py-4 sm:py-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            onClick={onNavigateBlogIndex}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
+          <a
+            href="/blog"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateBlogIndex();
+            }}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             <span>All Blog Articles</span>
-          </button>
+          </a>
           <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">
             /
           </span>
-          <button
-            type="button"
-            onClick={onNavigateHome}
-            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateHome();
+            }}
+            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
           >
             DNS Locator Tool
-          </button>
+          </a>
         </div>
 
         <button
@@ -613,7 +465,10 @@ function BlogArticleView({
             <span aria-hidden="true">·</span>
             <span className="inline-flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
-              <time dateTime={post.publishedAt}>{post.publishedAt}</time>
+              <span>
+                Published <time dateTime={post.publishedAt}>{post.publishedAt}</time> · Updated{' '}
+                <time dateTime={post.updatedAt}>{post.updatedAt}</time>
+              </span>
             </span>
             <span aria-hidden="true">·</span>
             <span className="inline-flex items-center gap-1">
@@ -630,6 +485,16 @@ function BlogArticleView({
             {post.excerpt}
           </p>
 
+          <figure className="pt-1">
+            <img
+              src={post.shareImage}
+              alt={post.shareImageAlt}
+              width={1200}
+              height={675}
+              className="w-full h-auto rounded-xl border border-slate-200 dark:border-slate-800"
+            />
+          </figure>
+
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <Tag className="w-3.5 h-3.5 text-slate-400 mr-1" aria-hidden="true" />
             {post.keywords.map((kw) => (
@@ -643,7 +508,23 @@ function BlogArticleView({
           </div>
         </header>
 
-        <div className="space-y-7">
+        {/* Pillar Back-Link Banner for Supporting Guides */}
+        {!post.isPillarGuide && (
+          <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/70 dark:bg-emerald-950/30 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+            <span className="text-emerald-900 dark:text-emerald-200">
+              Part of our DNS Propagation Series. Looking for full TTL &amp; cutover theory?
+            </span>
+            <a
+              href="/blog/complete-guide-to-dns-propagation"
+              onClick={(e) => handleLink(e, '/blog/complete-guide-to-dns-propagation')}
+              className="font-semibold text-emerald-700 dark:text-emerald-300 hover:underline whitespace-nowrap shrink-0"
+            >
+              Read Complete Propagation Guide →
+            </a>
+          </div>
+        )}
+
+        <div className="space-y-8">
           {post.sections.map((section) => (
             <section key={section.heading} className="space-y-3">
               <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100">
@@ -657,6 +538,21 @@ function BlogArticleView({
                   {paragraph}
                 </p>
               ))}
+              {section.image && (
+                <figure className="pt-2">
+                  <img
+                    src={section.image.src}
+                    alt={section.image.alt}
+                    width={960}
+                    height={540}
+                    loading="lazy"
+                    className="w-full h-auto rounded-xl border border-slate-200 dark:border-slate-800"
+                  />
+                  <figcaption className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                    {section.image.caption}
+                  </figcaption>
+                </figure>
+              )}
               {section.bullets && section.bullets.length > 0 && (
                 <ul className="list-disc pl-5 space-y-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                   {section.bullets.map((bullet, idx) => (
@@ -672,6 +568,53 @@ function BlogArticleView({
               )}
             </section>
           ))}
+        </div>
+
+        {/* Related Record-Type Tools inside Article */}
+        {relatedTools.length > 0 && (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 p-5 space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              Focused DNS Diagnostic Tools Referenced in This Guide
+            </h3>
+            <div className="flex flex-wrap gap-2.5">
+              {relatedTools.map((tool) => (
+                <a
+                  key={tool.slug}
+                  href={`/${tool.slug}`}
+                  onClick={(e) => handleLink(e, `/${tool.slug}`)}
+                  className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-sky-400 dark:hover:border-sky-600 text-xs font-semibold text-slate-800 dark:text-slate-100 inline-flex items-center gap-1.5"
+                >
+                  <span className="font-mono text-emerald-700 dark:text-emerald-400">
+                    {tool.recordType}
+                  </span>
+                  <span>{tool.navLabel}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Author Bio Box */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-5 flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+            <UserCheck className="w-5 h-5" aria-hidden="true" />
+          </div>
+          <div className="space-y-1 text-xs sm:text-sm">
+            <div className="font-bold text-slate-900 dark:text-slate-100">
+              {author.name}{' '}
+              <span className="font-normal text-slate-500 dark:text-slate-400">
+                · {author.role}
+              </span>
+            </div>
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">{author.bio}</p>
+            <a
+              href="/about"
+              onClick={(e) => handleLink(e, '/about')}
+              className="inline-block font-semibold text-sky-700 dark:text-sky-400 hover:underline pt-0.5"
+            >
+              About DNS Locator Team →
+            </a>
+          </div>
         </div>
 
         {/* Diagnostic CTA inside Article */}
@@ -698,7 +641,7 @@ function BlogArticleView({
       {/* Related Guides */}
       <section aria-label="Related DNS Locator articles" className="space-y-3">
         <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-          More DNS Locator Articles
+          More DNS Locator Engineering Guides
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {relatedPosts.map((related) => (

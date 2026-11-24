@@ -14,32 +14,29 @@ const SLOT_CONFIG: Record<
   }
 > = {
   top: {
-    // Generous vertical separation from header & search input to prevent invalid clicks
-    outerClass: 'w-full mb-6 sm:mb-8 py-2',
+    outerClass: 'w-full mb-6 sm:mb-8 py-2 contain-layout',
     innerClass:
-      'w-full max-w-[970px] mx-auto min-h-[60px] sm:min-h-[90px] p-3 sm:p-4 flex items-center justify-center',
+      'w-full max-w-[970px] mx-auto h-[90px] sm:h-[100px] p-3 sm:p-4 flex items-center justify-center rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-900/40',
     ariaLabel: 'Top banner advertisement container',
   },
   sidebar: {
-    // Sticky 300px sidebar container buffered cleanly from results & tables
-    outerClass: 'w-full xl:w-[300px] py-2',
+    outerClass: 'w-full xl:w-[300px] py-2 contain-layout',
     innerClass:
-      'w-full min-h-[250px] xl:min-h-[600px] p-3 sm:p-4 flex items-center justify-center',
+      'w-full h-[250px] xl:h-[600px] p-3 sm:p-4 flex items-center justify-center rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-900/40',
     ariaLabel: 'Sidebar advertisement container',
   },
   bottom: {
-    // Generous top/bottom margin isolating from footer links & scroll-to-top button
-    outerClass: 'w-full mt-8 sm:mt-10 mb-2 py-2',
+    outerClass: 'w-full mt-8 sm:mt-10 mb-2 py-2 contain-layout',
     innerClass:
-      'w-full max-w-[970px] mx-auto min-h-[90px] sm:min-h-[100px] p-3 sm:p-4 flex items-center justify-center',
+      'w-full max-w-[970px] mx-auto h-[90px] sm:h-[100px] p-3 sm:p-4 flex items-center justify-center rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-900/40',
     ariaLabel: 'Bottom banner advertisement container',
   },
 };
 
 /**
  * AdSense layout wrapper.
- * Collapses with zero visual footprint until VITE_ADSENSE_CLIENT_ID is configured,
- * then automatically mounts responsive, CLS-safe containers with invalid-click buffer spacing.
+ * Collapses cleanly when VITE_ADSENSE_CLIENT_ID is unset,
+ * and reserves exact fixed heights when AdSense is enabled to prevent Cumulative Layout Shift (CLS).
  */
 export default function AdSlotWrapper({ placement, className = '' }: AdSlotWrapperProps) {
   const adsenseClient = getAdSenseClientId();

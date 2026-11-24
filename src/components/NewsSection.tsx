@@ -148,14 +148,17 @@ export default function NewsSection({
     <div className="max-w-5xl mx-auto py-4 sm:py-6 space-y-8">
       {/* Top Action Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <button
-          type="button"
-          onClick={onNavigateHome}
-          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigateHome();
+          }}
+          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300"
         >
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           <span>Back to DNS Lookup</span>
-        </button>
+        </a>
 
         <div className="flex flex-wrap items-center gap-3">
           {articles.length > 0 ? (

@@ -6,7 +6,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 import { generateAiGameDebrief, generateAiGameMission } from './server/gemini.ts';
-import { fetchLiveDnsNews, getAndEnsureDailyBlogs } from './server/newsAndDailyBlog.ts';
+import { fetchLiveDnsNews } from './server/newsAndDailyBlog.ts';
+import {
+  getPageSeoMeta,
+  getSitemapEntries,
+  parseAppRoute,
+  type PageSeoMeta,
+} from './src/lib/seo.ts';
 
 dotenv.config();
 
@@ -1057,11 +1063,24 @@ async function startServer() {
     next();
   });
 
+  const resolveCanonicalOrigin = (): string => {
+    const explicit = (process.env.CANONICAL_ORIGIN || '').trim();
+    if (explicit) return explicit.replace(/\/$/, '');
+    const appUrl = (process.env.APP_URL || '').trim();
+    if (
+      appUrl &&
+      !/ais-(?:dev|pre)-/i.test(appUrl) &&
+      !appUrl.includes('localhost') &&
+      !appUrl.includes('127.0.0.1')
+    ) {
+      return appUrl.replace(/\/$/, '');
+    }
+    return 'https://dnslocator.online';
+  };
+
   // SEO: robots.txt allowing indexing of all pages and linking sitemap.xml
-  app.get('/robots.txt', (req: Request, res: Response) => {
-    const origin =
-      process.env.APP_URL?.replace(/\/$/, '') ||
-      `${req.protocol}://${req.get('host') || 'dnslocator.online'}`;
+  app.get('/robots.txt', (_req: Request, res: Response) => {
+    const origin = resolveCanonicalOrigin();
     const publicRobotsPath = path.resolve(__dirname, 'public/robots.txt');
     if (fs.existsSync(publicRobotsPath)) {
       const template = fs.readFileSync(publicRobotsPath, 'utf-8');
@@ -1075,41 +1094,30 @@ async function startServer() {
       .send(['User-agent: *', 'Allow: /', '', `Sitemap: ${origin}/sitemap.xml`, ''].join('\n'));
   });
 
-  // SEO: sitemap.xml with only static authoritative pages (no programmatic /dns/* pages)
-  app.get('/sitemap.xml', (req: Request, res: Response) => {
-    const origin =
-      process.env.APP_URL?.replace(/\/$/, '') ||
-      `${req.protocol}://${req.get('host') || 'dnslocator.online'}`;
-    const pages = [
-      '/',
-      '/blog',
-      '/blog/how-to-run-a-global-dns-check-with-dns-locator',
-      '/blog/ip-address-lookup-and-ip-number-search-guide',
-      '/blog/what-is-my-isp-number-troubleshooting-local-dns-cache',
-      '/blog/using-tracert-and-dns-check-to-diagnose-routing-delays',
-      '/blog/find-open-ports-after-dns-a-record-migration',
-      '/blog/mac-address-lookup-and-mac-oui-lookup-for-network-admins',
-      '/blog/reverse-image-search-and-google-photo-lookup-for-brand-security',
-      '/blog/morse-code-translator-to-dns-packets-signal-encoding-history',
-      '/blog/hex-color-to-pantone-visual-qa-for-multi-region-dns-deployments',
-      '/blog/complete-website-launch-toolkit-dns-ip-mac-signal-and-brand-checks',
-      '/about',
-      '/contact',
-      '/privacy',
-      '/terms',
-      '/disclaimer',
-    ];
-    const today = new Date().toISOString().split('T')[0];
-    const urls = pages
+  // SEO: sitemap.xml with only authoritative tool, blog, news, and legal pages
+  app.get('/sitemap.xml', (_req: Request, res: Response) => {
+    const origin = resolveCanonicalOrigin();
+    const entries = getSitemapEntries(origin);
+    const urls = entries
       .map(
-        (p) =>
-          `  <url>\n    <loc>${origin}${p}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p === '/' || p === '/blog' ? 'weekly' : 'monthly'}</changefreq>\n    <priority>${p === '/' ? '1.0' : p.startsWith('/blog') ? '0.8' : '0.6'}</priority>\n  </url>`
+        (entry) =>
+          `  <url>\n    <loc>${entry.loc}</loc>\n    <lastmod>${entry.lastmod}</lastmod>\n    <changefreq>${entry.changefreq}</changefreq>\n    <priority>${entry.priority}</priority>\n  </url>`
       )
       .join('\n');
 
     res.type('application/xml').send(
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
     );
+  });
+
+  // AI search discovery guide in plain Markdown
+  app.get('/llms.txt', (_req: Request, res: Response) => {
+    const llmsPath = path.resolve(__dirname, 'public/llms.txt');
+    if (fs.existsSync(llmsPath)) {
+      res.type('text/markdown; charset=utf-8').send(fs.readFileSync(llmsPath, 'utf-8'));
+      return;
+    }
+    res.status(404).type('text/plain').send('llms.txt not found.');
   });
 
   // Health check
@@ -1527,42 +1535,22 @@ async function startServer() {
     }
   });
 
-  // Daily Blog Posts automatically derived from today's top live news post
-  app.get('/api/daily-blogs', async (_req: Request, res: Response) => {
+  // Automatic daily blog endpoints permanently retired (410 Gone)
+  app.get('/api/daily-blogs', (_req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
-    try {
-      const result = await getAndEnsureDailyBlogs();
-      return res.json(result);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Unable to load daily blog posts.';
-      return res.status(500).json({ error: message, posts: [] });
-    }
+    return res.status(410).json({
+      error: 'Automatic daily blog generation has been retired.',
+      gone: true,
+      posts: [],
+    });
   });
 
-  // Manual trigger to generate/refresh today's daily news blog post
-  app.post('/api/daily-blogs/generate', async (req: Request, res: Response) => {
-    const ip = getClientIp(req);
-    const rate = dnsRateLimiter.check(ip);
-    if (!rate.allowed) {
-      return res.status(429).json({
-        error: `Rate limit exceeded. Please wait ${rate.retryAfterSeconds}s before retrying.`,
-      });
-    }
-
-    try {
-      const result = await getAndEnsureDailyBlogs({ forceRegenerateToday: true });
-      if (result.error && !result.todayAvailable) {
-        const status = result.error.includes('GEMINI_API_KEY') ? 503 : 502;
-        return res.status(status).json({ error: result.error, posts: result.posts });
-      }
-      return res.json(result);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Unable to generate daily blog post.';
-      const status = message.includes('GEMINI_API_KEY') ? 503 : 502;
-      return res.status(status).json({ error: message });
-    }
+  app.post('/api/daily-blogs/generate', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(410).json({
+      error: 'Automatic daily blog generation has been retired.',
+      gone: true,
+    });
   });
 
   // Ensure unknown /api/* routes return JSON instead of falling through to HTML
@@ -1572,10 +1560,15 @@ async function startServer() {
 
   const httpServer = http.createServer(app);
 
-  // Optional Google Search Console HTML file verification support
+  // Optional Google & Bing Webmaster HTML/meta verification support
   const googleVerifyToken = (
     process.env.GOOGLE_SITE_VERIFICATION ||
     process.env.VITE_GOOGLE_SITE_VERIFICATION ||
+    ''
+  ).trim();
+  const bingVerifyToken = (
+    process.env.BING_SITE_VERIFICATION ||
+    process.env.VITE_BING_SITE_VERIFICATION ||
     ''
   ).trim();
   const googleVerifyFile = (process.env.GOOGLE_SITE_VERIFICATION_FILE || '').trim();
@@ -1585,21 +1578,131 @@ async function startServer() {
     });
   }
 
-  const injectHeadVerification = (html: string): string => {
-    if (!googleVerifyToken) {
-      return html;
-    }
-    const escaped = googleVerifyToken.replace(/"/g, '&quot;');
-    if (html.includes('name="google-site-verification"')) {
-      return html.replace(
-        /(<meta\s+name="google-site-verification"\s+content=")[^"]*(")/i,
-        `$1${escaped}$2`
+  const escapeAttr = (value: string): string =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+  const escapeText = (value: string): string =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const renderSeoHeadBlock = (seo: PageSeoMeta): string => {
+    const ldBlocks = seo.jsonLd
+      .map(
+        (schema) =>
+          `    <script type="application/ld+json" data-seo-ld="true">${JSON.stringify(schema).replace(
+            /<\/script/gi,
+            '<\\/script'
+          )}</script>`
+      )
+      .join('\n');
+
+    return [
+      `    <title>${escapeText(seo.title)}</title>`,
+      `    <meta name="description" content="${escapeAttr(seo.description)}" />`,
+      `    <meta name="robots" content="${escapeAttr(seo.robots)}" />`,
+      `    <link rel="canonical" href="${escapeAttr(seo.canonicalUrl)}" />`,
+      `    <meta property="og:type" content="${escapeAttr(seo.ogType)}" />`,
+      `    <meta property="og:site_name" content="DNS Locator" />`,
+      `    <meta property="og:url" content="${escapeAttr(seo.canonicalUrl)}" />`,
+      `    <meta property="og:title" content="${escapeAttr(seo.title)}" />`,
+      `    <meta property="og:description" content="${escapeAttr(seo.description)}" />`,
+      `    <meta property="og:image" content="${escapeAttr(seo.ogImage)}" />`,
+      `    <meta property="og:image:secure_url" content="${escapeAttr(seo.ogImage)}" />`,
+      `    <meta property="og:image:type" content="image/jpeg" />`,
+      `    <meta property="og:image:width" content="1280" />`,
+      `    <meta property="og:image:height" content="720" />`,
+      `    <meta property="og:image:alt" content="${escapeAttr(seo.ogImageAlt)}" />`,
+      `    <meta name="twitter:card" content="summary_large_image" />`,
+      `    <meta name="twitter:title" content="${escapeAttr(seo.title)}" />`,
+      `    <meta name="twitter:description" content="${escapeAttr(seo.description)}" />`,
+      `    <meta name="twitter:image" content="${escapeAttr(seo.ogImage)}" />`,
+      `    <meta name="twitter:image:alt" content="${escapeAttr(seo.ogImageAlt)}" />`,
+      ldBlocks,
+    ].join('\n');
+  };
+
+  const injectHeadMetadata = (
+    html: string,
+    seo?: PageSeoMeta,
+    forceNoIndex = false
+  ): string => {
+    let nextHtml = html;
+
+    if (googleVerifyToken) {
+      const escaped = escapeAttr(googleVerifyToken);
+      if (nextHtml.includes('name="google-site-verification"')) {
+        nextHtml = nextHtml.replace(
+          /(<meta\s+name="google-site-verification"\s+content=")[^"]*(")/i,
+          `$1${escaped}$2`
+        );
+      } else {
+        nextHtml = nextHtml.replace(
+          '</head>',
+          `    <meta name="google-site-verification" content="${escaped}" />\n  </head>`
+        );
+      }
+    } else {
+      nextHtml = nextHtml.replace(
+        /\s*<meta\s+name="google-site-verification"\s+content="(?:%VITE_GOOGLE_SITE_VERIFICATION%|)"\s*\/>/gi,
+        ''
       );
     }
-    return html.replace(
-      '</head>',
-      `    <meta name="google-site-verification" content="${escaped}" />\n  </head>`
-    );
+
+    if (bingVerifyToken) {
+      const escaped = escapeAttr(bingVerifyToken);
+      if (nextHtml.includes('name="msvalidate.01"')) {
+        nextHtml = nextHtml.replace(
+          /(<meta\s+name="msvalidate\.01"\s+content=")[^"]*(")/i,
+          `$1${escaped}$2`
+        );
+      } else {
+        nextHtml = nextHtml.replace(
+          '</head>',
+          `    <meta name="msvalidate.01" content="${escaped}" />\n  </head>`
+        );
+      }
+    } else {
+      nextHtml = nextHtml.replace(
+        /\s*<meta\s+name="msvalidate\.01"\s+content="(?:%VITE_BING_SITE_VERIFICATION%|)"\s*\/>/gi,
+        ''
+      );
+    }
+
+    if (seo) {
+      const headBlock = renderSeoHeadBlock(seo);
+      const seoMarkerRegex = /<!-- SEO_HEAD_START -->[\s\S]*?<!-- SEO_HEAD_END -->/;
+      if (seoMarkerRegex.test(nextHtml)) {
+        nextHtml = nextHtml.replace(
+          seoMarkerRegex,
+          () => `<!-- SEO_HEAD_START -->\n${headBlock}\n    <!-- SEO_HEAD_END -->`
+        );
+      }
+    }
+
+    if (forceNoIndex) {
+      nextHtml = nextHtml.replace(
+        /<meta\s+name="robots"\s+content="[^"]*"\s*\/>/i,
+        '<meta name="robots" content="noindex, follow" />'
+      );
+    }
+
+    return nextHtml;
+  };
+
+  const applySecurityHeaders = (res: Response, includeFrameGuard: boolean): void => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (includeFrameGuard) {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://cloudflare-dns.com https://dns.google https://get.geojs.io https://www.google-analytics.com https://region1.google-analytics.com; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+      );
+    }
   };
 
   // Vite dev middleware or production static assets
@@ -1683,53 +1786,112 @@ self.addEventListener('activate', (event) => {
       });
     }
 
-    if (googleVerifyToken) {
-      app.use(async (req, res, next) => {
-        if (
-          req.method === 'GET' &&
-          !req.path.startsWith('/api/') &&
-          !req.path.includes('.') &&
-          req.headers.accept?.includes('text/html')
-        ) {
-          try {
-            const rawHtml = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
-            const transformed = await vite.transformIndexHtml(
-              req.originalUrl,
-              injectHeadVerification(rawHtml)
-            );
-            res.status(200).set({ 'Content-Type': 'text/html' }).end(transformed);
-            return;
-          } catch (err) {
-            vite.ssrFixStacktrace(err as Error);
+    app.use(async (req, res, next) => {
+      const isInternalVite =
+        req.path.startsWith('/@') ||
+        req.path.startsWith('/src/') ||
+        req.path.startsWith('/node_modules/') ||
+        req.path.startsWith('/__');
+      const hasStaticExt = /\.[a-z0-9]+$/i.test(req.path) && req.path !== '/410.html';
+      const acceptsHtml = req.headers.accept?.includes('text/html') || req.headers.accept === '*/*';
+
+      if (req.method === 'GET' && !req.path.startsWith('/api/') && !isInternalVite && !hasStaticExt && acceptsHtml) {
+        try {
+          const parsed = parseAppRoute(req.path);
+          const origin = resolveCanonicalOrigin();
+          const hasSearchQuery = Boolean(req.query.domain || req.query.q);
+          const seo = getPageSeoMeta(req.path, { origin, hasSearchQuery });
+          const rawHtml = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
+          const transformed = await vite.transformIndexHtml(
+            req.originalUrl,
+            injectHeadMetadata(rawHtml, seo, hasSearchQuery)
+          );
+          applySecurityHeaders(res, false);
+          if (parsed.httpStatus !== 200) {
+            res.setHeader('Cache-Control', 'no-store');
           }
+          res.status(parsed.httpStatus).set({ 'Content-Type': 'text/html' }).end(transformed);
+          return;
+        } catch (err) {
+          vite.ssrFixStacktrace(err as Error);
         }
-        next();
-      });
-    }
+      }
+      next();
+    });
     app.use(vite.middlewares);
   } else {
     const distDir = path.resolve(__dirname, 'dist');
-    app.use(express.static(distDir, { index: false }));
-    app.get('*', (_req: Request, res: Response) => {
-      const indexHtml = path.join(distDir, 'index.html');
-      if (fs.existsSync(indexHtml)) {
-        if (googleVerifyToken) {
-          const raw = fs.readFileSync(indexHtml, 'utf-8');
-          res.type('text/html').send(injectHeadVerification(raw));
-        } else {
-          res.sendFile(indexHtml);
+    app.use(
+      express.static(distDir, {
+        index: false,
+        setHeaders(res, filePath) {
+          applySecurityHeaders(res, true);
+          const rel = path.relative(distDir, filePath).replace(/\\/g, '/');
+          if (rel.startsWith('assets/') || rel.startsWith('fonts/')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          } else if (rel.startsWith('images/')) {
+            res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+          }
+        },
+      })
+    );
+
+    app.get('*', (req: Request, res: Response) => {
+      applySecurityHeaders(res, true);
+      const parsed = parseAppRoute(req.path);
+
+      if (parsed.httpStatus === 410) {
+        const goneHtml = path.join(distDir, '410.html');
+        res.setHeader('Cache-Control', 'no-store');
+        if (fs.existsSync(goneHtml)) {
+          const raw = fs.readFileSync(goneHtml, 'utf-8');
+          res.status(410).type('text/html').send(injectHeadMetadata(raw));
+          return;
         }
-      } else {
-        res.status(404).send('Build output not found. Run npm run build first.');
+        const fallback = path.join(distDir, 'index.html');
+        if (fs.existsSync(fallback)) {
+          const raw = fs.readFileSync(fallback, 'utf-8');
+          res.status(410).type('text/html').send(injectHeadMetadata(raw, undefined, true));
+          return;
+        }
+        res.status(410).send('This article has been permanently removed (410 Gone).');
+        return;
       }
+
+      if (parsed.httpStatus === 404) {
+        const notFoundHtml = path.join(distDir, '404.html');
+        res.setHeader('Cache-Control', 'no-store');
+        if (fs.existsSync(notFoundHtml)) {
+          const raw = fs.readFileSync(notFoundHtml, 'utf-8');
+          res.status(404).type('text/html').send(injectHeadMetadata(raw));
+          return;
+        }
+        res.status(404).send('Page not found.');
+        return;
+      }
+
+      const routeHtmlPath =
+        parsed.cleanPath === '/'
+          ? path.join(distDir, 'index.html')
+          : path.join(distDir, parsed.cleanPath.slice(1), 'index.html');
+      const targetHtml = fs.existsSync(routeHtmlPath)
+        ? routeHtmlPath
+        : path.join(distDir, 'index.html');
+
+      if (fs.existsSync(targetHtml)) {
+        const hasSearchQuery = Boolean(req.query.domain || req.query.q);
+        const raw = fs.readFileSync(targetHtml, 'utf-8');
+        res.status(200).type('text/html').send(injectHeadMetadata(raw, undefined, hasSearchQuery));
+        return;
+      }
+
+      res.status(404).send('Build output not found. Run npm run build first.');
     });
   }
 
   const port = Number(process.env.PORT) || 3000;
   httpServer.listen(port, '0.0.0.0', () => {
     console.log(`dnslocator.online server listening on http://0.0.0.0:${port}`);
-    // Pre-warm newsroom & daily blog caches in the background so user requests stay instant
-    void getAndEnsureDailyBlogs().catch(() => {});
   });
 }
 

@@ -560,26 +560,19 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<SupportedLang>(() => {
-    try {
-      const override = window.localStorage.getItem(LANG_ENGLISH_OVERRIDE_KEY);
-      if (override === '1') return 'en';
-      const saved = window.localStorage.getItem(LANG_STORAGE_KEY);
-      if (saved && SUPPORTED_CODE_SET.has(saved)) {
-        return saved as SupportedLang;
-      }
-    } catch {
-      // Ignore storage errors
-    }
-    return 'en';
-  });
+  const [lang, setLangState] = useState<SupportedLang>('en');
 
-  // Detect regional language strictly via visitor IP unless user explicitly clicked English
+  // Detect saved or regional language after hydration so SSR & initial client DOM always match cleanly
   useEffect(() => {
     let cancelled = false;
     try {
-      if (window.localStorage.getItem(LANG_ENGLISH_OVERRIDE_KEY) === '1') {
+      const override = window.localStorage.getItem(LANG_ENGLISH_OVERRIDE_KEY);
+      if (override === '1') {
         return;
+      }
+      const saved = window.localStorage.getItem(LANG_STORAGE_KEY);
+      if (saved && SUPPORTED_CODE_SET.has(saved) && saved !== 'en') {
+        setLangState(saved as SupportedLang);
       }
     } catch {
       // Ignore storage errors

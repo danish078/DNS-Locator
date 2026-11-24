@@ -1,3 +1,5 @@
+import { getSitemapEntries, parseAppRoute } from './src/lib/seo.ts';
+
 type DnsRecordType =
   | 'A'
   | 'AAAA'
@@ -796,26 +798,6 @@ interface WorkerNewsArticle {
   suggestedDomain: string;
 }
 
-interface WorkerDailyBlogPost {
-  slug: string;
-  title: string;
-  metaDescription: string;
-  excerpt: string;
-  category: string;
-  publishedAt: string;
-  readTimeMinutes: number;
-  keywords: string[];
-  suggestedDomain: string;
-  suggestedRecordType: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'SOA' | 'CAA';
-  sections: Array<{
-    heading: string;
-    paragraphs: string[];
-    bullets?: string[];
-    tip?: string;
-  }>;
-  isDailyBrief: true;
-}
-
 const WORKER_PRIVATE_FEEDS: Array<{ feedUrl: string; defaultRelevance: WorkerNewsRelevance }> = [
   { feedUrl: 'https://blog.apnic.net/feed/', defaultRelevance: 'routing' },
   { feedUrl: 'https://labs.ripe.net/rss/', defaultRelevance: 'dns' },
@@ -1067,131 +1049,39 @@ async function getWorkerLiveNews(forceRefresh = false): Promise<{
   return payload;
 }
 
-function buildWorkerDailyBlogPost(
-  article: WorkerNewsArticle,
-  dateKey: string
-): WorkerDailyBlogPost {
-  const cleanTitle = cleanWorkerText(article.title);
-  const slugBase =
-    cleanTitle
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 56) || 'dns-locator-daily-brief';
+const WORKER_CSP =
+  "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://cloudflare-dns.com https://dns.google https://get.geojs.io https://www.google-analytics.com https://region1.google-analytics.com; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
 
-  const categoryMap: Record<WorkerNewsRelevance, string> = {
-    dns: 'DNS Propagation',
-    routing: 'Routing & IPv6',
-    security: 'DNS Security',
-    infrastructure: 'Network Diagnostics',
-  };
-  const recordTypeMap: Record<WorkerNewsRelevance, WorkerDailyBlogPost['suggestedRecordType']> = {
-    dns: 'NS',
-    routing: 'AAAA',
-    security: 'TXT',
-    infrastructure: 'A',
-  };
-  const keywordPool: Record<WorkerNewsRelevance, string[]> = {
-    dns: ['dns check', 'dns propagation', 'ttl caching', 'nameserver audit', 'dnssec', 'anycast routing'],
-    routing: ['dns check', 'ip address lookup', 'anycast routing', 'ipv6 adoption', 'bgp stability', 'latency audit'],
-    security: ['dns security', 'dnssec', 'dmarc verification', 'spf records', 'dns check', 'zone integrity'],
-    infrastructure: ['dns propagation', 'edge latency', 'resolver health', 'dns check', 'ttl strategy', 'network diagnostics'],
-  };
+function withSecurityHeaders(
+  response: Response,
+  pathname: string,
+  overrideStatus?: number,
+  extraHeaders?: Record<string, string>
+): Response {
+  const headers = new Headers(response.headers);
+  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('X-Frame-Options', 'SAMEORIGIN');
+  headers.set('Content-Security-Policy', WORKER_CSP);
 
-  return {
-    slug: `daily-${dateKey}-${slugBase}`,
-    title: cleanTitle.length >= 24 ? cleanTitle : `DNS Locator Daily Brief: ${cleanTitle}`,
-    metaDescription: article.summary.slice(0, 158),
-    excerpt: article.summary.slice(0, 210),
-    category: categoryMap[article.relevance],
-    publishedAt: dateKey,
-    readTimeMinutes: 5,
-    keywords: keywordPool[article.relevance],
-    suggestedDomain: article.suggestedDomain || 'www.dnslocator.online',
-    suggestedRecordType: recordTypeMap[article.relevance],
-    isDailyBrief: true,
-    sections: [
-      {
-        heading: 'What Changed Across Global DNS & Network Paths',
-        paragraphs: [article.summary, article.details || article.summary],
-        bullets: [
-          'Compare authoritative DNS answers across North America, Europe, Asia-Pacific, and Oceania checkpoints.',
-          'Monitor resolver latency variance and Time to Live (TTL) expiration curves during active network changes.',
-          'Validate IPv4 (A) and IPv6 (AAAA) dual-stack consistency before routing production traffic.',
-        ],
-        tip: 'Run a fresh multi-region lookup on DNS Locator immediately after updating DNS zone records to confirm consensus across all 18 checkpoints.',
-      },
-      {
-        heading: 'Operational Checklist for Domain & Infrastructure Teams',
-        paragraphs: [
-          'Consistent zone configuration reduces resolution delays and prevents partial regional outages when recursive resolvers refresh cached answers.',
-          'Teams managing multi-region deployments should audit both primary authoritative records and supporting security policies such as DNSSEC, SPF, and DMARC.',
-        ],
-        bullets: [
-          'Lower record TTL values to 300 seconds ahead of scheduled migrations or failover tests.',
-          'Inspect SOA serial alignment and NS delegation consistency across secondary nameservers.',
-          'Use domain comparison audits to catch stale CNAME or TXT entries across staging and production zones.',
-        ],
-      },
-      {
-        heading: 'Verifying Propagation & Latency in Real Time',
-        paragraphs: [
-          'Continuous checkpoint visibility helps engineers distinguish between localized ISP caching delays and upstream authoritative misconfigurations.',
-          'By pairing propagation checks with latency distribution reviews, operators can verify fast, uniform DNS resolution for global visitors.',
-        ],
-      },
-    ],
-  };
-}
+  if (pathname.startsWith('/assets/') || pathname.startsWith('/fonts/')) {
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  } else if (pathname.startsWith('/images/')) {
+    headers.set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+  }
 
-async function getWorkerDailyBlogs(forceRegenerate = false): Promise<{
-  posts: WorkerDailyBlogPost[];
-  todayDate: string;
-  todayAvailable: boolean;
-  generating: boolean;
-  error?: string;
-}> {
-  const todayDate = new Date().toISOString().slice(0, 10);
-  const cacheKey = `daily-blog:${todayDate}`;
-  if (!forceRegenerate) {
-    const hit = memoryCache.get(cacheKey);
-    if (hit) {
-      return {
-        posts: [hit.value as unknown as WorkerDailyBlogPost],
-        todayDate,
-        todayAvailable: true,
-        generating: false,
-      };
+  if (extraHeaders) {
+    for (const [k, v] of Object.entries(extraHeaders)) {
+      headers.set(k, v);
     }
   }
 
-  const news = await getWorkerLiveNews(forceRegenerate);
-  const preferred =
-    news.articles.find((a) => a.relevance === 'dns') ??
-    news.articles.find((a) => a.relevance === 'routing') ??
-    news.articles[0];
-
-  if (!preferred) {
-    return {
-      posts: [],
-      todayDate,
-      todayAvailable: false,
-      generating: false,
-      error: 'No current DNS updates available for today’s daily briefing.',
-    };
-  }
-
-  const post = buildWorkerDailyBlogPost(preferred, todayDate);
-  memoryCache.set(cacheKey, {
-    value: post as unknown as Record<string, unknown>,
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+  return new Response(response.body, {
+    status: overrideStatus ?? response.status,
+    statusText: response.statusText,
+    headers,
   });
-  return {
-    posts: [post],
-    todayDate,
-    todayAvailable: true,
-    generating: false,
-  };
 }
 
 export default {
@@ -1227,31 +1117,25 @@ export default {
       );
     }
 
+    if (url.pathname === '/llms.txt') {
+      const assetRes = await env.ASSETS.fetch(request);
+      if (assetRes.ok) {
+        return withSecurityHeaders(assetRes, url.pathname, 200, {
+          'Content-Type': 'text/markdown; charset=utf-8',
+        });
+      }
+      return new Response(
+        `# DNS Locator\n\n> Global DNS propagation and record diagnostics at ${origin}/ across 18 worldwide checkpoints.\n`,
+        { status: 200, headers: { 'Content-Type': 'text/markdown; charset=utf-8' } }
+      );
+    }
+
     if (url.pathname === '/sitemap.xml') {
-      const pages = [
-        '/',
-        '/blog',
-        '/blog/how-to-run-a-global-dns-check-with-dns-locator',
-        '/blog/ip-address-lookup-and-ip-number-search-guide',
-        '/blog/what-is-my-isp-number-troubleshooting-local-dns-cache',
-        '/blog/using-tracert-and-dns-check-to-diagnose-routing-delays',
-        '/blog/find-open-ports-after-dns-a-record-migration',
-        '/blog/mac-address-lookup-and-mac-oui-lookup-for-network-admins',
-        '/blog/reverse-image-search-and-google-photo-lookup-for-brand-security',
-        '/blog/morse-code-translator-to-dns-packets-signal-encoding-history',
-        '/blog/hex-color-to-pantone-visual-qa-for-multi-region-dns-deployments',
-        '/blog/complete-website-launch-toolkit-dns-ip-mac-signal-and-brand-checks',
-        '/about',
-        '/contact',
-        '/privacy',
-        '/terms',
-        '/disclaimer',
-      ];
-      const today = new Date().toISOString().split('T')[0];
-      const urls = pages
+      const entries = getSitemapEntries(origin);
+      const urls = entries
         .map(
-          (p) =>
-            `  <url>\n    <loc>${origin}${p}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${p === '/' || p === '/blog' ? 'weekly' : 'monthly'}</changefreq>\n    <priority>${p === '/' ? '1.0' : p.startsWith('/blog') ? '0.8' : '0.6'}</priority>\n  </url>`
+          (entry) =>
+            `  <url>\n    <loc>${entry.loc}</loc>\n    <lastmod>${entry.lastmod}</lastmod>\n    <changefreq>${entry.changefreq}</changefreq>\n    <priority>${entry.priority}</priority>\n  </url>`
         )
         .join('\n');
       return new Response(
@@ -1610,30 +1494,41 @@ export default {
       }
     }
 
-    if (url.pathname === '/api/daily-blogs' && request.method === 'GET') {
-      try {
-        const result = await getWorkerDailyBlogs(false);
-        return jsonResponse(result, 200, { ...corsHeaders, 'Cache-Control': 'no-store' });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unable to load daily blog posts.';
-        return jsonResponse({ error: msg, posts: [] }, 500, { ...corsHeaders, 'Cache-Control': 'no-store' });
-      }
-    }
-
-    if (url.pathname === '/api/daily-blogs/generate' && request.method === 'POST') {
-      try {
-        const result = await getWorkerDailyBlogs(true);
-        return jsonResponse(result, 200, { ...corsHeaders, 'Cache-Control': 'no-store' });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unable to generate daily blog post.';
-        return jsonResponse({ error: msg, posts: [] }, 502, { ...corsHeaders, 'Cache-Control': 'no-store' });
-      }
+    if (url.pathname === '/api/daily-blogs' || url.pathname === '/api/daily-blogs/generate') {
+      return jsonResponse(
+        { error: 'Automatic daily blog generation has been retired.', gone: true, posts: [] },
+        410,
+        { ...corsHeaders, 'Cache-Control': 'no-store' }
+      );
     }
 
     if (url.pathname.startsWith('/api/')) {
       return jsonResponse({ error: 'API endpoint not found.' }, 404, corsHeaders);
     }
 
-    return env.ASSETS.fetch(request);
+    const parsed = parseAppRoute(url.pathname);
+    if (parsed.httpStatus === 410) {
+      const goneAsset = await env.ASSETS.fetch(
+        new Request(new URL('/410.html', url.origin), { method: 'GET' })
+      );
+      return withSecurityHeaders(goneAsset, url.pathname, 410, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+    }
+
+    const hasFileExt = /\.[a-z0-9]+$/i.test(url.pathname);
+    if (parsed.httpStatus === 404 && !hasFileExt) {
+      const notFoundAsset = await env.ASSETS.fetch(
+        new Request(new URL('/404.html', url.origin), { method: 'GET' })
+      );
+      return withSecurityHeaders(notFoundAsset, url.pathname, 404, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+    }
+
+    const assetResponse = await env.ASSETS.fetch(request);
+    return withSecurityHeaders(assetResponse, url.pathname);
   },
 };

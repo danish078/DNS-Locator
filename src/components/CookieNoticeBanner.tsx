@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Cookie, ShieldCheck, X } from 'lucide-react';
 import { updateGoogleConsent } from '../lib/tracking';
 import type { LegalPageRoute } from './LegalPages';
@@ -62,7 +62,17 @@ export default function CookieNoticeBanner({
   onCloseForceOpen,
   onConsentSaved,
 }: CookieNoticeBannerProps) {
+  const [mounted, setMounted] = useState(false);
   const [dismissedForVersion, setDismissedForVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
   const saved = getSavedCookieConsent();
 
   const shouldShow =
@@ -102,16 +112,17 @@ export default function CookieNoticeBanner({
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 DNS Locator uses essential local storage for 5-minute DNS caching, theme preferences, and IP-detected language selection. With your acceptance, Google Analytics and Google AdSense may use cookies in compliance with EU GDPR and Google policies. Read our{' '}
-                <button
-                  type="button"
-                  onClick={() => {
+                <a
+                  href="/privacy"
+                  onClick={(e) => {
+                    e.preventDefault();
                     onCloseForceOpen?.();
                     onNavigatePage('privacy');
                   }}
-                  className="text-sky-700 dark:text-sky-400 underline hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
+                  className="text-sky-700 dark:text-sky-400 underline hover:text-sky-900 dark:hover:text-sky-300"
                 >
                   Privacy Policy
-                </button>
+                </a>
                 .
               </p>
               {saved.choice && (

@@ -1,0 +1,35 @@
+# DNS Locator
+
+> Independent global DNS propagation and record diagnostics utility at https://dnslocator.online/. Queries live public DNS records across 18 worldwide checkpoints in parallel using DNS over HTTPS (DoH) and regional EDNS Client Subnet resolvers.
+
+## Core Tools
+- [Global DNS Propagation & All-Record Lookup](https://dnslocator.online/): Simultaneous 18-region DNS propagation verification plus full zone A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, and _dmarc checks.
+- [A Record Lookup](https://dnslocator.online/a-record-lookup): Live 32-bit IPv4 server address check across 18 global checkpoints.
+- [AAAA Record Lookup](https://dnslocator.online/aaaa-record-lookup): Live 128-bit IPv6 address and dual-stack propagation checker.
+- [MX Record Lookup](https://dnslocator.online/mx-lookup): Mail exchanger hostname and priority verification across regions.
+- [TXT & SPF Checker](https://dnslocator.online/txt-spf-checker): Inspect SPF sender policies, verification strings, and _dmarc readiness.
+- [CNAME Lookup](https://dnslocator.online/cname-lookup): Canonical subdomain alias propagation checker.
+- [NS Lookup](https://dnslocator.online/ns-lookup): Authoritative nameserver delegation verifier.
+- [SOA Lookup](https://dnslocator.online/soa-lookup): Start of Authority serial number and negative cache TTL checker.
+- [CAA Lookup](https://dnslocator.online/caa-lookup): Certificate Authority Authorization (TLS issuance policy) checker.
+- [PTR Reverse DNS Lookup](https://dnslocator.online/ptr-lookup): Reverse DNS hostname lookup for IPv4 addresses and .in-addr.arpa zones.
+
+## Pillar Guide & Engineering Library
+- [The Complete Guide to DNS Propagation](https://dnslocator.online/blog/complete-guide-to-dns-propagation): Authoritative overview of TTL timers, recursive caching layers, parent TLD delays, GeoDNS variance, and zero-downtime cutovers.
+- [Global DNS Check Guide](https://dnslocator.online/blog/how-to-run-a-global-dns-check-with-dns-locator): Step-by-step migration verification across 18 checkpoints.
+- [IP Address Lookup & Hosting Audits](https://dnslocator.online/blog/ip-address-lookup-and-ip-number-search-guide): Tracing A/AAAA records and ASN routing.
+- [Troubleshooting Local ISP Cache Lag](https://dnslocator.online/blog/what-is-my-isp-number-troubleshooting-local-dns-cache): Isolating broadband resolver overrides and SOA negative caching.
+- [DNS vs. Network Routing Delays](https://dnslocator.online/blog/using-tracert-and-dns-check-to-diagnose-routing-delays): Combining multi-region DNS checks with traceroute and port checks.
+- [MX, SPF, DMARC, CAA & DNSSEC Security Guide](https://dnslocator.online/blog/mx-spf-dmarc-and-dnssec-email-security-guide): Email deliverability and domain cryptographic hardening.
+
+## Original Telemetry & Methodology
+- Queries 18 public resolvers spanning North America, South America, Europe, Asia-Pacific, Oceania, and Africa via DoH JSON, Google ECS JSON, and RFC 8484 wireformat.
+- Typical public DoH Anycast checkpoints (1.1.1.1, Google 8.8.8.8) observe updated low-TTL records within 1–5 minutes; regional carrier ISPs often lag 15–120 minutes depending on local cache overrides; registrar NS delegation updates propagate across TLD registries over 24–48 hours.
+
+## Company & Policies
+- [About DNS Locator](https://dnslocator.online/about)
+- [Network & DNS Newsroom](https://dnslocator.online/news)
+- [Contact](https://dnslocator.online/contact)
+- [Privacy Policy](https://dnslocator.online/privacy)
+- [Terms and Conditions](https://dnslocator.online/terms)
+- [Disclaimer](https://dnslocator.online/disclaimer)

@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { AlertOctagon, ArrowLeft, Compass, Home, RefreshCw } from 'lucide-react';
+import { AlertOctagon, ArchiveX, ArrowLeft, BookOpen, Compass, Home, RefreshCw } from 'lucide-react';
 import type { LegalPageRoute } from './LegalPages';
 
 interface NotFoundTemplateProps {
@@ -43,52 +43,112 @@ export function NotFoundTemplate({
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onNavigateHome}
-            className="h-10 px-5 rounded-lg bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 text-white dark:text-slate-950 text-sm font-semibold shadow-xs shadow-emerald-700/20 dark:shadow-emerald-400/15 inline-flex items-center gap-2 transition-all cursor-pointer"
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateHome();
+            }}
+            className="h-10 px-5 rounded-lg bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 text-white dark:text-slate-950 text-sm font-semibold shadow-xs shadow-emerald-700/20 dark:shadow-emerald-400/15 inline-flex items-center gap-2 transition-all"
           >
             <Home className="w-4 h-4" aria-hidden="true" />
             <span>Back to DNS Lookup</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigatePage('contact')}
-            className="h-10 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium transition-colors cursor-pointer"
+          </a>
+          <a
+            href="/contact"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigatePage('contact');
+            }}
+            className="h-10 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium inline-flex items-center transition-colors"
           >
             Contact Support
-          </button>
+          </a>
         </div>
 
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-          <button
-            type="button"
-            onClick={() => onNavigatePage('about')}
-            className="hover:text-sky-700 dark:hover:text-sky-400 hover:underline cursor-pointer"
+          {(['about', 'privacy', 'terms', 'disclaimer'] as LegalPageRoute[]).map((p) => (
+            <a
+              key={p}
+              href={`/${p}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigatePage(p);
+              }}
+              className="hover:text-sky-700 dark:hover:text-sky-400 hover:underline capitalize"
+            >
+              {p === 'privacy' ? 'Privacy Policy' : p === 'terms' ? 'Terms and Conditions' : p}
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface GoneTemplateProps {
+  pathname: string;
+  onNavigateHome: () => void;
+  onNavigateBlog: () => void;
+}
+
+export function GoneTemplate({
+  pathname,
+  onNavigateHome,
+  onNavigateBlog,
+}: GoneTemplateProps) {
+  return (
+    <section
+      aria-labelledby="gone-heading"
+      className="max-w-2xl mx-auto py-12 sm:py-16"
+    >
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 sm:p-10 text-center shadow-sm space-y-5">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
+          <ArchiveX className="w-7 h-7" aria-hidden="true" />
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-mono font-bold tracking-widest uppercase text-amber-700 dark:text-amber-400">
+            HTTP 410 Gone
+          </p>
+          <h1
+            id="gone-heading"
+            className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100"
           >
-            About
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigatePage('privacy')}
-            className="hover:text-sky-700 dark:hover:text-sky-400 hover:underline cursor-pointer"
+            Article Permanently Removed
+          </h1>
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-md mx-auto leading-relaxed">
+            The resource{' '}
+            <code className="font-mono text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+              {pathname}
+            </code>{' '}
+            has been permanently retired as DNS Locator focuses exclusively on verified DNS propagation, routing, and domain security engineering guides.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <a
+            href="/blog"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateBlog();
+            }}
+            className="h-10 px-5 rounded-lg bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-600 hover:to-teal-600 dark:from-emerald-400 dark:to-teal-300 dark:hover:from-emerald-300 dark:hover:to-teal-200 text-white dark:text-slate-950 text-sm font-semibold inline-flex items-center gap-2 transition-all"
           >
-            Privacy Policy
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigatePage('terms')}
-            className="hover:text-sky-700 dark:hover:text-sky-400 hover:underline cursor-pointer"
+            <BookOpen className="w-4 h-4" aria-hidden="true" />
+            <span>Browse DNS Guides</span>
+          </a>
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateHome();
+            }}
+            className="h-10 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium inline-flex items-center gap-2 transition-colors"
           >
-            Terms and Conditions
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigatePage('disclaimer')}
-            className="hover:text-sky-700 dark:hover:text-sky-400 hover:underline cursor-pointer"
-          >
-            Disclaimer
-          </button>
+            <Home className="w-4 h-4" aria-hidden="true" />
+            <span>Back to DNS Lookup</span>
+          </a>
         </div>
       </div>
     </section>
@@ -144,19 +204,19 @@ export function GeneralErrorTemplate({
             <span>Reload Page</span>
           </button>
 
-          <button
-            type="button"
-            onClick={
-              onBackHome ??
-              (() => {
-                window.location.assign('/');
-              })
-            }
-            className="h-10 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium inline-flex items-center gap-2 transition-colors cursor-pointer"
+          <a
+            href="/"
+            onClick={(e) => {
+              if (onBackHome) {
+                e.preventDefault();
+                onBackHome();
+              }
+            }}
+            className="h-10 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium inline-flex items-center gap-2 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             <span>Back to Home</span>
-          </button>
+          </a>
         </div>
       </div>
     </section>

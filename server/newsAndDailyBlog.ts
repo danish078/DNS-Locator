@@ -2,10 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  generateDailyBlogPostFromNews,
   stripThirdPartyAndAiMentions,
   synthesizeDnsLocatorNewsDispatches,
-  type GeneratedDailyBlogPayload,
 } from './gemini.ts';
 
 export type NewsRelevance = 'dns' | 'routing' | 'security' | 'infrastructure';
@@ -55,9 +53,6 @@ const PRIVATE_NEWS_FEEDS: FeedSourceDef[] = [
 const NEWS_CACHE_TTL_MS = 25 * 60 * 1000;
 const NEWS_STORE_VERSION = 3;
 const NEWS_STORE_PATH = path.resolve(process.cwd(), '.cache', 'news-feed.json');
-const DAILY_BLOG_STORE_VERSION = 2;
-const DAILY_BLOG_STORE_PATH = path.resolve(process.cwd(), '.cache', 'daily-blogs.json');
-const MAX_STORED_DAILY_POSTS = 14;
 
 let cachedNewsState: {
   data: ServerNewsFeedResponse;
@@ -66,8 +61,6 @@ let cachedNewsState: {
 
 let pendingNewsFetch: Promise<ServerNewsFeedResponse> | null = null;
 let pendingNewsPolish: Promise<void> | null = null;
-let memoryDailyPosts: GeneratedDailyBlogPayload[] | null = null;
-let pendingDailyGeneration: Promise<void> | null = null;
 
 function decodeHtmlEntities(input: string): string {
   const named: Record<string, string> = {
@@ -454,227 +447,3 @@ export async function fetchLiveDnsNews(
   return pendingNewsFetch;
 }
 
-function getTodayUtcDateKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-interface StoredDailyBlogEnvelope {
-  version: number;
-  posts: GeneratedDailyBlogPayload[];
-}
-
-function readStoredDailyBlogs(): GeneratedDailyBlogPayload[] {
-  if (memoryDailyPosts) {
-    return memoryDailyPosts;
-  }
-  try {
-    if (fs.existsSync(DAILY_BLOG_STORE_PATH)) {
-      const raw = fs.readFileSync(DAILY_BLOG_STORE_PATH, 'utf-8');
-      const parsed = JSON.parse(raw) as StoredDailyBlogEnvelope | GeneratedDailyBlogPayload[];
-      if (
-        parsed &&
-        !Array.isArray(parsed) &&
-        parsed.version === DAILY_BLOG_STORE_VERSION &&
-        Array.isArray(parsed.posts)
-      ) {
-        memoryDailyPosts = parsed.posts;
-        return memoryDailyPosts;
-      }
-    }
-  } catch {
-    // Ignore stale v1 or corrupt cache and regenerate cleanly
-  }
-  memoryDailyPosts = [];
-  return memoryDailyPosts;
-}
-
-function writeStoredDailyBlogs(posts: GeneratedDailyBlogPayload[]): void {
-  const sorted = [...posts]
-    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
-    .slice(0, MAX_STORED_DAILY_POSTS);
-  memoryDailyPosts = sorted;
-
-  try {
-    fs.mkdirSync(path.dirname(DAILY_BLOG_STORE_PATH), { recursive: true });
-    const envelope: StoredDailyBlogEnvelope = {
-      version: DAILY_BLOG_STORE_VERSION,
-      posts: sorted,
-    };
-    fs.writeFileSync(DAILY_BLOG_STORE_PATH, JSON.stringify(envelope, null, 2), 'utf-8');
-  } catch {
-    // Continue with in-memory store if filesystem is read-only
-  }
-}
-
-let lastDailyError: string | undefined;
-
-function composeFallbackDailyBlogFromNews(
-  article: ServerNewsArticle,
-  dateKey: string
-): GeneratedDailyBlogPayload {
-  const cleanTitle = stripThirdPartyAndAiMentions(article.title);
-  const slugBase = cleanTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 56) || 'dns-locator-daily-brief';
-
-  const categoryMap: Record<NewsRelevance, string> = {
-    dns: 'DNS Propagation',
-    routing: 'Routing & IPv6',
-    security: 'DNS Security',
-    infrastructure: 'Network Diagnostics',
-  };
-
-  const recordTypeMap: Record<NewsRelevance, GeneratedDailyBlogPayload['suggestedRecordType']> = {
-    dns: 'NS',
-    routing: 'AAAA',
-    security: 'TXT',
-    infrastructure: 'A',
-  };
-
-  const keywordPool: Record<NewsRelevance, string[]> = {
-    dns: ['dns check', 'dns propagation', 'ttl caching', 'nameserver audit', 'dnssec', 'anycast routing'],
-    routing: ['dns check', 'ip address lookup', 'anycast routing', 'ipv6 adoption', 'bgp stability', 'latency audit'],
-    security: ['dns security', 'dnssec', 'dmarc verification', 'spf records', 'dns check', 'zone integrity'],
-    infrastructure: ['dns propagation', 'edge latency', 'resolver health', 'dns check', 'ttl strategy', 'network diagnostics'],
-  };
-
-  const cleanSummary = stripThirdPartyAndAiMentions(article.summary);
-  const cleanDetails = stripThirdPartyAndAiMentions(article.details || article.summary);
-
-  return {
-    slug: `daily-${dateKey}-${slugBase}`,
-    title: cleanTitle.length >= 24 ? cleanTitle : `DNS Locator Daily Brief: ${cleanTitle}`,
-    metaDescription: cleanSummary.slice(0, 158),
-    excerpt: cleanSummary.slice(0, 210),
-    category: categoryMap[article.relevance],
-    publishedAt: dateKey,
-    readTimeMinutes: 5,
-    keywords: keywordPool[article.relevance],
-    suggestedDomain: article.suggestedDomain || 'www.dnslocator.online',
-    suggestedRecordType: recordTypeMap[article.relevance],
-    isDailyBrief: true,
-    sections: [
-      {
-        heading: 'What Changed Across Global DNS & Network Paths',
-        paragraphs: [
-          cleanSummary,
-          cleanDetails,
-        ],
-        bullets: [
-          'Compare authoritative DNS answers across North America, Europe, Asia-Pacific, and Oceania checkpoints.',
-          'Monitor resolver latency variance and Time to Live (TTL) expiration curves during active network changes.',
-          'Validate IPv4 (A) and IPv6 (AAAA) dual-stack consistency before routing production traffic.',
-        ],
-        tip: 'Run a fresh multi-region lookup on DNS Locator immediately after updating DNS zone records to confirm consensus across all 18 checkpoints.',
-      },
-      {
-        heading: 'Operational Checklist for Domain & Infrastructure Teams',
-        paragraphs: [
-          'Consistent zone configuration reduces resolution delays and prevents partial regional outages when recursive resolvers refresh cached answers.',
-          'Teams managing multi-region deployments should audit both primary authoritative records and supporting security policies such as DNSSEC, SPF, and DMARC.',
-        ],
-        bullets: [
-          'Lower record TTL values to 300 seconds ahead of scheduled migrations or failover tests.',
-          'Inspect SOA serial alignment and NS delegation consistency across secondary nameservers.',
-          'Use domain comparison audits to catch stale CNAME or TXT entries across staging and production zones.',
-        ],
-      },
-      {
-        heading: 'Verifying Propagation & Latency in Real Time',
-        paragraphs: [
-          'Continuous checkpoint visibility helps engineers distinguish between localized ISP caching delays and upstream authoritative misconfigurations.',
-          'By pairing propagation checks with latency distribution reviews, operators can verify fast, uniform DNS resolution for global visitors.',
-        ],
-      },
-    ],
-  };
-}
-
-export async function getAndEnsureDailyBlogs(options?: {
-  forceRegenerateToday?: boolean;
-}): Promise<{
-  posts: GeneratedDailyBlogPayload[];
-  todayDate: string;
-  todayAvailable: boolean;
-  generating?: boolean;
-  error?: string;
-}> {
-  const todayDate = getTodayUtcDateKey();
-  let posts = readStoredDailyBlogs();
-  const hasToday = posts.some((p) => p.publishedAt === todayDate);
-
-  if (!hasToday || options?.forceRegenerateToday) {
-    let generationInFlight = true;
-    if (!pendingDailyGeneration) {
-      lastDailyError = undefined;
-      pendingDailyGeneration = (async () => {
-        try {
-          const newsFeed = await fetchLiveDnsNews(Boolean(options?.forceRegenerateToday));
-          const preferredArticle =
-            newsFeed.articles.find((a) => a.relevance === 'dns') ??
-            newsFeed.articles.find((a) => a.relevance === 'routing') ??
-            newsFeed.articles[0];
-
-          if (!preferredArticle) {
-            throw new Error('No current DNS updates available for today’s daily briefing.');
-          }
-
-          let generated: GeneratedDailyBlogPayload;
-          try {
-            generated = await generateDailyBlogPostFromNews(preferredArticle, todayDate);
-          } catch {
-            generated = composeFallbackDailyBlogFromNews(preferredArticle, todayDate);
-          }
-          const existingOtherDays = readStoredDailyBlogs().filter(
-            (p) => p.publishedAt !== todayDate && p.slug !== generated.slug
-          );
-          writeStoredDailyBlogs([generated, ...existingOtherDays]);
-        } catch (err) {
-          lastDailyError =
-            err instanceof Error
-              ? err.message
-              : 'Unable to publish today’s daily DNS Locator blog post.';
-        }
-      })().finally(() => {
-        generationInFlight = false;
-        pendingDailyGeneration = null;
-      });
-    }
-
-    // Bound HTTP wait to 3.5s so proxy/browser requests never time out on cold Gemini generation
-    await Promise.race([
-      pendingDailyGeneration.then(() => {
-        generationInFlight = false;
-      }),
-      new Promise<void>((resolve) => setTimeout(resolve, 3500)),
-    ]);
-
-    posts = readStoredDailyBlogs();
-    const availableNow = posts.some((p) => p.publishedAt === todayDate);
-    if (!availableNow && generationInFlight) {
-      return {
-        posts,
-        todayDate,
-        todayAvailable: false,
-        generating: true,
-      };
-    }
-
-    return {
-      posts,
-      todayDate,
-      todayAvailable: availableNow,
-      generating: false,
-      error: availableNow ? undefined : lastDailyError,
-    };
-  }
-
-  return {
-    posts,
-    todayDate,
-    todayAvailable: true,
-    generating: false,
-  };
-}

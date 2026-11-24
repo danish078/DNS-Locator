@@ -5,10 +5,13 @@ import {
   CheckCircle2,
   Cookie,
   FileText,
+  Globe,
   Info,
   Mail,
   ShieldCheck,
+  UserCheck,
 } from 'lucide-react';
+import { AUTHORS, ORGANIZATION_INFO } from '../data/authors';
 import { useI18n } from '../lib/i18n';
 
 export type LegalPageRoute =
@@ -80,32 +83,39 @@ export default function LegalPages({
   return (
     <div className="max-w-4xl mx-auto py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <button
-          type="button"
-          onClick={onNavigateHome}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 self-start cursor-pointer"
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigateHome();
+          }}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 self-start"
         >
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           <span>{t('backToTool')}</span>
-        </button>
+        </a>
 
         <nav
           aria-label="Policy and company pages"
           className="flex flex-wrap items-center gap-1.5 text-xs font-medium"
         >
           {LEGAL_TABS.map((tab) => (
-            <button
+            <a
               key={tab.id}
-              type="button"
-              onClick={() => onNavigatePage(tab.id)}
-              className={`px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer whitespace-nowrap ${
+              href={`/${tab.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigatePage(tab.id);
+              }}
+              aria-current={page === tab.id ? 'page' : undefined}
+              className={`px-2.5 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${
                 page === tab.id
                   ? 'border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 font-semibold'
                   : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               {tab.label}
-            </button>
+            </a>
           ))}
         </nav>
       </div>
@@ -125,9 +135,97 @@ export default function LegalPages({
                 {t('aboutSubtitle')}
               </p>
             </div>
-            <div className="space-y-4 text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+            <div className="space-y-6 text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
               <p>{t('aboutP1')}</p>
               <p>{t('aboutP2')}</p>
+
+              {/* Named Maintainers & Editorial Team */}
+              <section aria-labelledby="team-heading" className="space-y-4 pt-2">
+                <h2
+                  id="team-heading"
+                  className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100"
+                >
+                  Engineering Team &amp; Editorial Authors
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.values(AUTHORS).map((member) => (
+                    <article
+                      key={member.id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 p-5 space-y-2.5"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                          <UserCheck className="w-5 h-5" aria-hidden="true" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                            {member.name}
+                          </h3>
+                          <p className="text-xs font-medium text-sky-700 dark:text-sky-400">
+                            {member.role}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {member.bio}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {member.expertise.map((topic) => (
+                          <span
+                            key={topic}
+                            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300"
+                          >
+                            {topic}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              {/* Public Profiles & Organization Info */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm">
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
+                    <span>{ORGANIZATION_INFO.legalName}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Direct inquiries:{' '}
+                    <a
+                      href="/contact"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onNavigatePage('contact');
+                      }}
+                      className="text-sky-700 dark:text-sky-400 hover:underline font-medium"
+                    >
+                      Contact Engineering Support
+                    </a>{' '}
+                    · Source &amp; tools profile:{' '}
+                    <a
+                      href="https://github.com/dnslocator"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sky-700 dark:text-sky-400 hover:underline font-medium"
+                    >
+                      github.com/dnslocator
+                    </a>
+                  </p>
+                </div>
+                <a
+                  href="/"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigateHome();
+                  }}
+                  className="h-9 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-600 dark:bg-emerald-400 dark:hover:bg-emerald-300 text-white dark:text-slate-950 text-xs font-semibold inline-flex items-center justify-center shrink-0"
+                >
+                  Launch DNS Lookup Tool
+                </a>
+              </div>
+
               <div className="rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 p-4 text-sm text-slate-700 dark:text-slate-300">
                 <strong className="text-slate-900 dark:text-slate-100 block mb-1">
                   {t('nonAffiliationTitle')}
@@ -256,13 +354,16 @@ export default function LegalPages({
                 </h2>
                 <p>
                   {t('privacyS4Body')}{' '}
-                  <button
-                    type="button"
-                    onClick={() => onNavigatePage('contact')}
-                    className="text-sky-700 dark:text-sky-400 underline hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
+                  <a
+                    href="/contact"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onNavigatePage('contact');
+                    }}
+                    className="text-sky-700 dark:text-sky-400 underline hover:text-sky-900 dark:hover:text-sky-300"
                   >
                     {t('navContact')}
-                  </button>
+                  </a>
                 </p>
               </section>
             </div>
