@@ -27,6 +27,74 @@
   font-variant-numeric: tabular-nums;
 }
 
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer,
+.skeleton-shimmer-emerald,
+.skeleton-shimmer-sky {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(226, 232, 240, 0.85);
+}
+
+.skeleton-shimmer-emerald {
+  background-color: rgba(209, 250, 229, 0.8);
+}
+
+.skeleton-shimmer-sky {
+  background-color: rgba(224, 242, 254, 0.85);
+}
+
+.dark .skeleton-shimmer {
+  background-color: rgba(30, 41, 59, 0.9);
+}
+
+.dark .skeleton-shimmer-emerald {
+  background-color: rgba(6, 78, 59, 0.45);
+}
+
+.dark .skeleton-shimmer-sky {
+  background-color: rgba(12, 74, 110, 0.45);
+}
+
+.skeleton-shimmer::after,
+.skeleton-shimmer-emerald::after,
+.skeleton-shimmer-sky::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.58) 45%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 255, 255, 0.58) 55%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.45s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.dark .skeleton-shimmer::after,
+.dark .skeleton-shimmer-emerald::after,
+.dark .skeleton-shimmer-sky::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.12) 45%,
+    rgba(226, 232, 240, 0.2) 50%,
+    rgba(148, 163, 184, 0.12) 55%,
+    transparent 100%
+  );
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { BLOG_POSTS, getBlogPostBySlug, type BlogPost } from '../data/blogs';
 import type { DnsRecordType } from '../types/dns';
+import { SkeletonBlock } from './Skeleton';
 
 interface BlogSectionProps {
   activeSlug: string | null;
@@ -95,6 +96,15 @@ export default function BlogSection({
         onNavigateBlogIndex={onNavigateBlogIndex}
         onSelectPost={onSelectPost}
         onRunDnsCheck={onRunDnsCheck}
+      />
+    );
+  }
+
+  if (activeSlug && !activePost && isDailyLoading && activeSlug.startsWith('daily-')) {
+    return (
+      <BlogArticleSkeleton
+        onNavigateHome={onNavigateHome}
+        onNavigateBlogIndex={onNavigateBlogIndex}
       />
     );
   }
@@ -212,10 +222,9 @@ export default function BlogSection({
         )}
 
         {isDailyLoading && filteredDailyPosts.length === 0 ? (
-          <div className="h-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 animate-pulse space-y-3">
-            <div className="h-3 w-48 rounded bg-slate-200 dark:bg-slate-800" />
-            <div className="h-5 w-3/4 rounded bg-slate-200 dark:bg-slate-800" />
-            <div className="h-12 w-full rounded bg-slate-100 dark:bg-slate-800/60" />
+          <div role="status" aria-busy="true" aria-live="polite" className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <span className="sr-only">Loading today&apos;s DNS Locator daily briefing</span>
+            <BlogCardSkeleton isDaily />
           </div>
         ) : filteredDailyPosts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -287,6 +296,150 @@ export default function BlogSection({
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function BlogCardSkeleton({ isDaily = false }: { isDaily?: boolean }) {
+  return (
+    <div
+      className={`rounded-xl border p-6 flex flex-col justify-between gap-4 ${
+        isDaily
+          ? 'border-emerald-200/90 dark:border-emerald-800/70 bg-gradient-to-br from-white via-emerald-50/25 to-teal-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/20'
+          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'
+      }`}
+    >
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SkeletonBlock
+            tone={isDaily ? 'emerald' : 'sky'}
+            className="h-3.5 w-40 rounded-md"
+          />
+          <div className="flex items-center gap-3">
+            <SkeletonBlock className="h-3.5 w-20 rounded-md" />
+            <SkeletonBlock className="h-3.5 w-16 rounded-md" />
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-0.5">
+          <SkeletonBlock className="h-5 w-11/12 rounded-md" />
+          <SkeletonBlock className="h-5 w-3/4 rounded-md" />
+        </div>
+
+        <div className="space-y-2 pt-1">
+          <SkeletonBlock className="h-3.5 w-full rounded-md" />
+          <SkeletonBlock className="h-3.5 w-5/6 rounded-md" />
+        </div>
+      </div>
+
+      <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SkeletonBlock className="h-5 w-20 rounded-md" />
+          <SkeletonBlock className="h-5 w-24 rounded-md" />
+          <SkeletonBlock className="h-5 w-16 rounded-md" />
+          <SkeletonBlock className="h-5 w-20 rounded-md" />
+          <SkeletonBlock className="h-5 w-14 rounded-md" />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <SkeletonBlock tone="sky" className="h-3.5 w-28 rounded-md" />
+          <SkeletonBlock className="h-3.5 w-24 rounded-md" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BlogArticleSkeleton({
+  onNavigateHome,
+  onNavigateBlogIndex,
+}: {
+  onNavigateHome: () => void;
+  onNavigateBlogIndex: () => void;
+}) {
+  return (
+    <div role="status" aria-busy="true" aria-live="polite" className="max-w-4xl mx-auto py-4 sm:py-6 space-y-6">
+      <span className="sr-only">Loading DNS Locator blog article</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            onClick={onNavigateBlogIndex}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-300 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+            <span>All Blog Articles</span>
+          </button>
+          <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">
+            /
+          </span>
+          <button
+            type="button"
+            onClick={onNavigateHome}
+            className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+          >
+            DNS Locator Tool
+          </button>
+        </div>
+
+        <SkeletonBlock tone="emerald" className="h-9 w-36 rounded-lg" />
+      </div>
+
+      <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-10 space-y-7">
+        <header className="space-y-4 border-b border-slate-100 dark:border-slate-800 pb-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <SkeletonBlock tone="sky" className="h-3.5 w-36 rounded-md" />
+            <SkeletonBlock className="h-3.5 w-24 rounded-md" />
+            <SkeletonBlock className="h-3.5 w-20 rounded-md" />
+          </div>
+
+          <div className="space-y-2.5">
+            <SkeletonBlock className="h-8 w-11/12 rounded-lg" />
+            <SkeletonBlock className="h-8 w-2/3 rounded-lg" />
+          </div>
+
+          <div className="space-y-2">
+            <SkeletonBlock className="h-4 w-full rounded-md" />
+            <SkeletonBlock className="h-4 w-5/6 rounded-md" />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <SkeletonBlock className="h-5 w-20 rounded-md" />
+            <SkeletonBlock className="h-5 w-24 rounded-md" />
+            <SkeletonBlock className="h-5 w-20 rounded-md" />
+            <SkeletonBlock className="h-5 w-16 rounded-md" />
+            <SkeletonBlock className="h-5 w-24 rounded-md" />
+          </div>
+        </header>
+
+        <div className="space-y-7">
+          {Array.from({ length: 3 }).map((_, secIdx) => (
+            <div key={secIdx} className="space-y-3">
+              <SkeletonBlock className="h-6 w-64 rounded-md" />
+              <div className="space-y-2">
+                <SkeletonBlock className="h-4 w-full rounded-md" />
+                <SkeletonBlock className="h-4 w-11/12 rounded-md" />
+                <SkeletonBlock className="h-4 w-4/5 rounded-md" />
+              </div>
+              <div className="pl-4 space-y-2 pt-1">
+                <SkeletonBlock className="h-3.5 w-5/6 rounded-md" />
+                <SkeletonBlock className="h-3.5 w-3/4 rounded-md" />
+              </div>
+              {secIdx === 0 && (
+                <SkeletonBlock tone="sky" className="h-12 w-full rounded-lg border border-sky-200/70 dark:border-sky-800/50" />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2 flex-1">
+            <SkeletonBlock className="h-4 w-52 rounded-md" />
+            <SkeletonBlock className="h-3.5 w-80 max-w-full rounded-md" />
+          </div>
+          <SkeletonBlock tone="emerald" className="h-9 w-36 rounded-lg shrink-0" />
+        </div>
+      </article>
     </div>
   );
 }

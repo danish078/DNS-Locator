@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -13,12 +13,15 @@ import {
 } from 'lucide-react';
 import type { DnsRecordType } from '../types/dns';
 import type { NewsArticle, NewsFeedResponse, NewsRelevance } from '../types/news';
+import { SkeletonBlock } from './Skeleton';
 
 interface NewsSectionProps {
   feed: NewsFeedResponse | null;
   isLoading: boolean;
+  retryAttempt?: number;
   error: string | null;
   onRefresh: () => void;
+  onRetry?: () => void;
   onNavigateHome: () => void;
   onRunDnsCheck: (domain: string, recordType: DnsRecordType) => void;
 }
@@ -52,11 +55,53 @@ function formatNewsDate(iso: string): string {
   }
 }
 
+function NewsCardSkeleton({ variant = 0 }: { variant?: number }) {
+  const titleSecondWidth = variant % 2 === 0 ? 'w-3/4' : 'w-4/5';
+  const bodyThirdWidth = variant % 2 === 0 ? 'w-2/3' : 'w-3/4';
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-col justify-between gap-4">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <SkeletonBlock tone="emerald" className="h-3.5 w-36 rounded-md" />
+          <SkeletonBlock className="h-3.5 w-20 rounded-md" />
+        </div>
+
+        <div className="space-y-2 pt-0.5">
+          <SkeletonBlock className="h-5 w-11/12 rounded-md" />
+          <SkeletonBlock className={`h-5 ${titleSecondWidth} rounded-md`} />
+        </div>
+
+        <div className="space-y-2 pt-1">
+          <SkeletonBlock className="h-3.5 w-full rounded-md" />
+          <SkeletonBlock className="h-3.5 w-11/12 rounded-md" />
+          <SkeletonBlock className={`h-3.5 ${bodyThirdWidth} rounded-md`} />
+        </div>
+      </div>
+
+      <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SkeletonBlock className="h-5 w-16 rounded-md" />
+          <SkeletonBlock className="h-5 w-20 rounded-md" />
+          <SkeletonBlock className="h-5 w-14 rounded-md" />
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <SkeletonBlock tone="sky" className="h-3.5 w-24 rounded-md" />
+          <SkeletonBlock className="h-3.5 w-32 rounded-md" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NewsSection({
   feed,
   isLoading,
+  retryAttempt = 0,
   error,
   onRefresh,
+  onRetry,
   onNavigateHome,
   onRunDnsCheck,
 }: NewsSectionProps) {
@@ -64,15 +109,25 @@ export default function NewsSection({
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const articles = useMemo(
+    () => (Array.isArray(feed?.articles) ? feed.articles : []),
+    [feed]
+  );
+
   const availableTopics = useMemo(() => {
-    const present = new Set((feed?.articles ?? []).map((a) => a.relevance));
+    const present = new Set(articles.map((a) => a.relevance));
     return TOPIC_FILTERS.filter((t) => t.id === 'all' || present.has(t.id));
-  }, [feed?.articles]);
+  }, [articles]);
+
+  useEffect(() => {
+    if (topicFilter !== 'all' && !availableTopics.some((t) => t.id === topicFilter)) {
+      setTopicFilter('all');
+    }
+  }, [availableTopics, topicFilter]);
 
   const filteredArticles = useMemo(() => {
-    const list = feed?.articles ?? [];
     const q = query.trim().toLowerCase();
-    return list.filter((item) => {
+    return articles.filter((item) => {
       if (topicFilter !== 'all' && item.relevance !== topicFilter) {
         return false;
       }
@@ -84,7 +139,10 @@ export default function NewsSection({
         item.categories.some((c) => c.toLowerCase().includes(q))
       );
     });
-  }, [feed?.articles, topicFilter, query]);
+  }, [articles, topicFilter, query]);
+
+  const handleRetryAction = onRetry ?? onRefresh;
+  const isInitialLoading = isLoading && articles.length === 0;
 
   return (
     <div className="max-w-5xl mx-auto py-4 sm:py-6 space-y-8">
@@ -100,10 +158,12 @@ export default function NewsSection({
         </button>
 
         <div className="flex flex-wrap items-center gap-3">
-          {feed && (
+          {articles.length > 0 ? (
             <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
-              {feed.articles.length} DNS Locator Reports
+              {articles.length} DNS Locator Reports
             </span>
+          ) : (
+            isInitialLoading && <SkeletonBlock className="h-4 w-32 rounded-md" />
           )}
           <button
             type="button"
@@ -173,15 +233,23 @@ export default function NewsSection({
                 {topic.label}
               </button>
             ))}
+
+            {isInitialLoading && (
+              <>
+                <SkeletonBlock className="h-[34px] w-28 rounded-lg border border-slate-200/80 dark:border-slate-800" />
+                <SkeletonBlock className="h-[34px] w-24 rounded-lg border border-slate-200/80 dark:border-slate-800" />
+                <SkeletonBlock className="h-[34px] w-20 rounded-lg border border-slate-200/80 dark:border-slate-800" />
+              </>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Error State */}
-      {error && !feed && (
+      {/* Error Banner with Retry Handling */}
+      {error && (
         <div
           role="alert"
-          className="rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          className="rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/75 dark:bg-rose-950/30 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
         >
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" aria-hidden="true" />
@@ -194,32 +262,59 @@ export default function NewsSection({
           </div>
           <button
             type="button"
-            onClick={onRefresh}
-            className="h-9 px-4 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-semibold shrink-0 cursor-pointer"
+            onClick={handleRetryAction}
+            disabled={isLoading}
+            className="h-9 px-4 rounded-lg bg-rose-700 hover:bg-rose-600 disabled:opacity-60 text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-colors"
           >
-            Retry
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            <span>{isLoading ? 'Retrying…' : 'Retry'}</span>
           </button>
         </div>
       )}
 
-      {/* Loading Skeleton */}
-      {isLoading && !feed && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="h-52 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 animate-pulse space-y-4"
-            >
-              <div className="h-3 w-40 rounded bg-slate-200 dark:bg-slate-800" />
-              <div className="h-5 w-4/5 rounded bg-slate-200 dark:bg-slate-800" />
-              <div className="h-14 w-full rounded bg-slate-100 dark:bg-slate-800/60" />
-            </div>
-          ))}
+      {/* Refined Shimmering Skeleton Grid (Initial Load & Auto-Retry) */}
+      {isInitialLoading && (
+        <div role="status" aria-busy="true" aria-live="polite" className="space-y-5">
+          <span className="sr-only">
+            {retryAttempt > 0
+              ? `Reconnecting to DNS Locator Newsroom (attempt ${retryAttempt + 1} of 3)`
+              : 'Loading latest DNS Locator network and infrastructure news'}
+          </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <NewsCardSkeleton key={idx} variant={idx} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Subtle Shimmer Progress Bar while Refreshing Existing Feed */}
+      {isLoading && articles.length > 0 && (
+        <div role="status" aria-busy="true" aria-live="polite" className="space-y-1">
+          <span className="sr-only">Refreshing DNS Locator news reports</span>
+          <SkeletonBlock tone="sky" className="h-1.5 w-full rounded-full" />
+        </div>
+      )}
+
+      {/* Fallback Empty Prompt if not loading, no error, and no feed yet */}
+      {!isLoading && !error && articles.length === 0 && (
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center space-y-3">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            DNS Locator news reports are not loaded yet.
+          </p>
+          <button
+            type="button"
+            onClick={handleRetryAction}
+            className="h-9 px-4 rounded-lg bg-sky-700 hover:bg-sky-600 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Load News Reports</span>
+          </button>
         </div>
       )}
 
       {/* News Cards Grid */}
-      {feed && filteredArticles.length === 0 ? (
+      {articles.length > 0 && filteredArticles.length === 0 ? (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center space-y-2.5">
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
             No news reports matched your current filter.
@@ -232,15 +327,20 @@ export default function NewsSection({
             }}
             className="text-xs font-semibold text-sky-700 dark:text-sky-400 hover:underline cursor-pointer"
           >
-            Reset filters and show all {feed.articles.length} reports
+            Reset filters and show all {articles.length} reports
           </button>
         </div>
       ) : (
-        feed && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        articles.length > 0 && (
+          <div
+            className={`grid grid-cols-1 md:grid-cols-2 gap-5 transition-opacity duration-200 ${
+              isLoading ? 'opacity-75' : 'opacity-100'
+            }`}
+          >
             {filteredArticles.map((article: NewsArticle) => {
               const isExpanded = expandedId === article.id;
               const checkDomain = article.suggestedDomain || 'www.dnslocator.online';
+              const relevanceLabel = RELEVANCE_LABEL[article.relevance] ?? 'DNS & Resolvers';
               return (
                 <article
                   key={article.id}
@@ -249,7 +349,7 @@ export default function NewsSection({
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
                       <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                        DNS Locator · {RELEVANCE_LABEL[article.relevance]}
+                        DNS Locator · {relevanceLabel}
                       </span>
                       <span className="inline-flex items-center gap-1 tabular-nums">
                         <Calendar className="w-3.5 h-3.5" aria-hidden="true" />

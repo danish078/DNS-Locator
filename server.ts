@@ -1040,6 +1040,23 @@ async function startServer() {
   const dnsCache = new TtlMemoryCache<Record<string, unknown>>(500);
   const propagationCache = new TtlMemoryCache<Record<string, unknown>>(500);
 
+  // CORS & preflight support for /api/* routes across preview/custom origins
+  app.use('/api', (req: Request, res: Response, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end();
+    }
+    next();
+  });
+
   // SEO: robots.txt allowing indexing of all pages and linking sitemap.xml
   app.get('/robots.txt', (req: Request, res: Response) => {
     const origin =
@@ -1498,6 +1515,7 @@ async function startServer() {
 
   // Live DNS, Routing & Network Infrastructure News Aggregator
   app.get('/api/news', async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
     const forceRefresh = req.query.refresh === '1';
     try {
       const feed = await fetchLiveDnsNews(forceRefresh);
@@ -1511,6 +1529,7 @@ async function startServer() {
 
   // Daily Blog Posts automatically derived from today's top live news post
   app.get('/api/daily-blogs', async (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
     try {
       const result = await getAndEnsureDailyBlogs();
       return res.json(result);
@@ -1544,6 +1563,11 @@ async function startServer() {
       const status = message.includes('GEMINI_API_KEY') ? 503 : 502;
       return res.status(status).json({ error: message });
     }
+  });
+
+  // Ensure unknown /api/* routes return JSON instead of falling through to HTML
+  app.use('/api', (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'API endpoint not found.' });
   });
 
   const httpServer = http.createServer(app);

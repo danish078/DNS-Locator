@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -52,7 +53,7 @@ const PRIVATE_NEWS_FEEDS: FeedSourceDef[] = [
 ];
 
 const NEWS_CACHE_TTL_MS = 25 * 60 * 1000;
-const NEWS_STORE_VERSION = 2;
+const NEWS_STORE_VERSION = 3;
 const NEWS_STORE_PATH = path.resolve(process.cwd(), '.cache', 'news-feed.json');
 const DAILY_BLOG_STORE_VERSION = 2;
 const DAILY_BLOG_STORE_PATH = path.resolve(process.cwd(), '.cache', 'daily-blogs.json');
@@ -210,7 +211,7 @@ function parseFeedXml(xml: string, source: FeedSourceDef): RawParsedFeedItem[] {
     const relevance = classifyRelevance(title, summary, categories, source.defaultRelevance);
 
     const idSeed = `${source.defaultRelevance}:${publishedAt}:${title}`.toLowerCase();
-    const id = Buffer.from(idSeed).toString('base64url').slice(0, 24);
+    const id = crypto.createHash('sha256').update(idSeed).digest('base64url').slice(0, 20);
 
     items.push({
       id,
@@ -228,7 +229,7 @@ function parseFeedXml(xml: string, source: FeedSourceDef): RawParsedFeedItem[] {
 
 async function fetchSingleFeed(source: FeedSourceDef): Promise<RawParsedFeedItem[]> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
+  const timeout = setTimeout(() => controller.abort(), 4500);
   try {
     const response = await fetch(source.feedUrl, {
       signal: controller.signal,

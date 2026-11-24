@@ -59,7 +59,87 @@ import {
   type DnsRecordType,
   type PropagationResponse,
 } from './types/dns';
-import type { NewsFeedResponse } from './types/news';
+import type { NewsArticle, NewsFeedResponse, NewsRelevance } from './types/news';
+
+const VALID_NEWS_RELEVANCE = new Set<NewsRelevance>([
+  'dns',
+  'routing',
+  'security',
+  'infrastructure',
+]);
+
+function normalizeNewsFeedResponse(raw: unknown): NewsFeedResponse {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Unexpected news response payload.');
+  }
+  const obj = raw as Record<string, unknown>;
+  const nestedData =
+    obj.data && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : null;
+  const candidateList = Array.isArray(obj.articles)
+    ? obj.articles
+    : Array.isArray(nestedData?.articles)
+      ? nestedData.articles
+      : Array.isArray(obj.items)
+        ? obj.items
+        : null;
+
+  if (!candidateList) {
+    throw new Error('News response did not contain an articles list.');
+  }
+
+  const articles: NewsArticle[] = [];
+  for (let i = 0; i < candidateList.length; i++) {
+    const item = candidateList[i];
+    if (!item || typeof item !== 'object') continue;
+    const rec = item as Record<string, unknown>;
+    const title = typeof rec.title === 'string' ? rec.title.trim() : '';
+    if (!title) continue;
+
+    const rawRel = typeof rec.relevance === 'string' ? rec.relevance.toLowerCase().trim() : '';
+    const relevance: NewsRelevance = VALID_NEWS_RELEVANCE.has(rawRel as NewsRelevance)
+      ? (rawRel as NewsRelevance)
+      : 'dns';
+
+    const summary =
+      typeof rec.summary === 'string' && rec.summary.trim() ? rec.summary.trim() : title;
+    const details =
+      typeof rec.details === 'string' && rec.details.trim() ? rec.details.trim() : summary;
+    const categories = Array.isArray(rec.categories)
+      ? rec.categories.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+      : [];
+
+    articles.push({
+      id: typeof rec.id === 'string' && rec.id.trim() ? rec.id.trim() : `news-${i}-${title.slice(0, 16)}`,
+      title,
+      publisher: 'DNS Locator',
+      publishedAt:
+        typeof rec.publishedAt === 'string' && rec.publishedAt.trim()
+          ? rec.publishedAt
+          : new Date().toISOString(),
+      summary,
+      details,
+      categories,
+      relevance,
+      suggestedDomain:
+        typeof rec.suggestedDomain === 'string' && rec.suggestedDomain.trim()
+          ? rec.suggestedDomain.trim()
+          : 'www.dnslocator.online',
+    });
+  }
+
+  if (articles.length === 0) {
+    throw new Error('No DNS Locator news reports are available yet. Please retry.');
+  }
+
+  return {
+    articles,
+    fetchedAt:
+      typeof obj.fetchedAt === 'string' && obj.fetchedAt.trim()
+        ? obj.fetchedAt
+        : new Date().toISOString(),
+    cached: Boolean(obj.cached),
+  };
+}
 
 type AppRoute = 'home' | LegalPageRoute | 'news' | 'blog' | 'blog-post' | 'not-found';
 type WorkspaceView = 'overview' | 'all' | 'regions';
@@ -129,6 +209,7 @@ export default function App() {
 
   const [newsFeed, setNewsFeed] = useState<NewsFeedResponse | null>(null);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
+  const [newsRetryAttempt, setNewsRetryAttempt] = useState(0);
   const [newsError, setNewsError] = useState<string | null>(null);
 
   const [dailyPosts, setDailyPosts] = useState<BlogPost[]>([]);
@@ -475,36 +556,90 @@ export default function App() {
   );
 
   const dailyPollTimerRef = useRef<number | null>(null);
+  const newsRetryTimerRef = useRef<number | null>(null);
+  const newsAbortRef = useRef<AbortController | null>(null);
 
   const fetchNews = useCallback(async (forceRefresh = false, retryAttempt = 0) => {
+    if (newsRetryTimerRef.current) {
+      window.clearTimeout(newsRetryTimerRef.current);
+      newsRetryTimerRef.current = null;
+    }
+    if (newsAbortRef.current) {
+      newsAbortRef.current.abort();
+      newsAbortRef.current = null;
+    }
+
+    const controller = new AbortController();
+    newsAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+
     setIsNewsLoading(true);
+    setNewsRetryAttempt(retryAttempt);
     setNewsError(null);
+    let keepLoadingForRetry = false;
+
     try {
       const res = await fetch(`/api/news${forceRefresh ? '?refresh=1' : ''}`, {
         cache: 'no-store',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
       });
+
+      const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
-      let json: Partial<NewsFeedResponse> & { error?: string } = {};
-      try {
-        json = text ? (JSON.parse(text) as Partial<NewsFeedResponse> & { error?: string }) : {};
-      } catch {
-        throw new Error('Invalid news response');
+
+      let json: unknown = {};
+      if (text) {
+        if (contentType.includes('text/html') && !text.trim().startsWith('{')) {
+          throw new Error('News endpoint returned HTML instead of JSON.');
+        }
+        try {
+          json = JSON.parse(text);
+        } catch {
+          throw new Error('Unable to parse DNS Locator news JSON response.');
+        }
       }
+
       if (!res.ok) {
-        setNewsError(json.error || `Unable to load news updates (HTTP ${res.status}).`);
+        const errMsg =
+          json && typeof json === 'object' && 'error' in json && typeof (json as { error?: unknown }).error === 'string'
+            ? (json as { error: string }).error
+            : `Unable to load news updates (HTTP ${res.status}).`;
+        throw new Error(errMsg);
+      }
+
+      const normalized = normalizeNewsFeedResponse(json);
+      setNewsFeed(normalized);
+      setNewsRetryAttempt(0);
+    } catch (err) {
+      if (controller.signal.aborted && newsAbortRef.current !== controller) {
+        // Superseded by a newer user-triggered fetch
         return;
       }
-      setNewsFeed(json as NewsFeedResponse);
-    } catch {
       if (retryAttempt < 2) {
-        window.setTimeout(() => {
-          void fetchNews(forceRefresh, retryAttempt + 1);
-        }, 1200);
+        keepLoadingForRetry = true;
+        const nextAttempt = retryAttempt + 1;
+        setNewsRetryAttempt(nextAttempt);
+        newsRetryTimerRef.current = window.setTimeout(() => {
+          void fetchNews(forceRefresh, nextAttempt);
+        }, 1200 * nextAttempt);
         return;
       }
-      setNewsError('Unable to load DNS Locator news right now. Please click Retry.');
+      const message =
+        err instanceof Error && err.name === 'AbortError'
+          ? 'DNS Locator news request timed out. Please click Retry.'
+          : err instanceof Error && err.message
+            ? err.message
+            : 'Unable to load DNS Locator news right now. Please click Retry.';
+      setNewsError(message);
     } finally {
-      setIsNewsLoading(false);
+      window.clearTimeout(timeoutId);
+      if (newsAbortRef.current === controller) {
+        newsAbortRef.current = null;
+      }
+      if (!keepLoadingForRetry) {
+        setIsNewsLoading(false);
+      }
     }
   }, []);
 
@@ -572,18 +707,39 @@ export default function App() {
       if (dailyPollTimerRef.current) {
         window.clearTimeout(dailyPollTimerRef.current);
       }
+      if (newsRetryTimerRef.current) {
+        window.clearTimeout(newsRetryTimerRef.current);
+      }
+      if (newsAbortRef.current) {
+        newsAbortRef.current.abort();
+      }
     };
   }, [fetchNews, fetchDailyBlogs]);
 
-  // Ensure data loads cleanly if visitor navigates to News or Blog after a cold start
+  // Ensure data loads cleanly if visitor navigates to News or Blog after a cold start (without looping on error)
   useEffect(() => {
-    if (route === 'news' && !newsFeed && !isNewsLoading) {
+    if (route === 'news' && !newsFeed && !isNewsLoading && !newsError) {
       void fetchNews();
     }
-    if ((route === 'blog' || route === 'blog-post') && dailyPosts.length === 0 && !isDailyLoading) {
+    if (
+      (route === 'blog' || route === 'blog-post') &&
+      dailyPosts.length === 0 &&
+      !isDailyLoading &&
+      !dailyError
+    ) {
       void fetchDailyBlogs();
     }
-  }, [route, newsFeed, isNewsLoading, dailyPosts.length, isDailyLoading, fetchNews, fetchDailyBlogs]);
+  }, [
+    route,
+    newsFeed,
+    isNewsLoading,
+    newsError,
+    dailyPosts.length,
+    isDailyLoading,
+    dailyError,
+    fetchNews,
+    fetchDailyBlogs,
+  ]);
 
   // Support optional ?domain= deep links on initial mount
   useEffect(() => {
@@ -835,8 +991,10 @@ export default function App() {
                   <NewsSection
                     feed={newsFeed}
                     isLoading={isNewsLoading}
+                    retryAttempt={newsRetryAttempt}
                     error={newsError}
-                    onRefresh={() => fetchNews(true)}
+                    onRefresh={() => void fetchNews(true)}
+                    onRetry={() => void fetchNews(false)}
                     onNavigateHome={() => navigate('home')}
                     onRunDnsCheck={(domain, nextType) => {
                       setRawInput(domain);
