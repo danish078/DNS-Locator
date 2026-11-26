@@ -1129,19 +1129,6 @@ export default function App({ initialPath }: AppProps) {
               {t('navLookup')}
             </a>
             <a
-              href="/a-record-lookup"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/a-record-lookup');
-              }}
-              aria-current={route === 'record-tool' ? 'page' : undefined}
-              className={`hover:text-slate-900 dark:hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
-                route === 'record-tool' ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : ''
-              }`}
-            >
-              Record Tools
-            </a>
-            <a
               href="/blog/complete-guide-to-dns-propagation"
               onClick={(e) => {
                 e.preventDefault();
@@ -1230,18 +1217,6 @@ export default function App({ initialPath }: AppProps) {
             }`}
           >
             {t('navLookup')}
-          </a>
-          <a
-            href="/a-record-lookup"
-            onClick={(e) => {
-              e.preventDefault();
-              navigatePath('/a-record-lookup');
-            }}
-            className={`whitespace-nowrap shrink-0 ${
-              route === 'record-tool' ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : ''
-            }`}
-          >
-            Record Tools
           </a>
           <a
             href="/blog/complete-guide-to-dns-propagation"
@@ -1705,79 +1680,9 @@ export default function App({ initialPath }: AppProps) {
             <p>{t('footerDisclaimer')}</p>
           </div>
           <nav
-            aria-label="Footer tools, guides, and legal links"
+            aria-label="Footer legal and information links"
             className="flex flex-wrap items-center gap-x-4 gap-y-2 shrink-0"
           >
-            <a
-              href="/a-record-lookup"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/a-record-lookup');
-              }}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
-            >
-              A Record
-            </a>
-            <a
-              href="/mx-lookup"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/mx-lookup');
-              }}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
-            >
-              MX Lookup
-            </a>
-            <a
-              href="/txt-spf-checker"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/txt-spf-checker');
-              }}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
-            >
-              TXT / SPF
-            </a>
-            <a
-              href="/cname-lookup"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/cname-lookup');
-              }}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
-            >
-              CNAME
-            </a>
-            <a
-              href="/blog/complete-guide-to-dns-propagation"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/blog/complete-guide-to-dns-propagation');
-              }}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
-            >
-              Propagation Guide
-            </a>
-            <a
-              href="/news"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/news');
-              }}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
-            >
-              {t('navNews')}
-            </a>
-            <a
-              href="/blog"
-              onClick={(e) => {
-                e.preventDefault();
-                navigatePath('/blog');
-              }}
-              className="hover:text-slate-900 dark:hover:text-slate-100 hover:underline whitespace-nowrap"
-            >
-              {t('navBlog')}
-            </a>
             <a
               href="/about"
               onClick={(e) => {
